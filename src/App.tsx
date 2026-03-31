@@ -13,7 +13,8 @@ import {
   onSnapshot, 
   orderBy, 
   deleteDoc,
-  doc
+  doc,
+  updateDoc
 } from './firebase';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -31,7 +32,10 @@ import {
   ChevronDown,
   Calendar,
   Clock,
-  FileText
+  FileText,
+  Settings,
+  UserCog,
+  Percent
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -49,16 +53,26 @@ interface Conversation {
   id: string;
   employeeId: string;
   employeeName: string;
+  employeeOwner: string;
+  employeeOwnerName: string;
   date: string;
   subject: string;
   notes?: string;
   createdBy: string;
+  createdByName: string;
 }
 
 interface LocalUser {
   uid: string;
   email: string;
   displayName: string;
+}
+
+interface RTA {
+  id: string;
+  uid: string;
+  email: string;
+  name: string;
 }
 
 enum OperationType {
@@ -165,7 +179,29 @@ const translations = {
     selectEmployee: "Selecione o Agente",
     customSubject: "Assunto Personalizado",
     save: "Salvar",
-    cancel: "Cancelar"
+    cancel: "Cancelar",
+    filterByRTA: "Filtrar por RTA",
+    allRTAs: "Todos os RTAs",
+    responsibleAgent: "RTA Responsável",
+    registeredBy: "Registrado por",
+    selectLanguage: "Selecione o Idioma",
+    selectAll: "Selecionar Todos",
+    deleteSelected: "Excluir Selecionados",
+    selectedCount: (count: number) => `${count} selecionado(s)`,
+    management: "Gerenciamento",
+    rtaManagement: "Gerenciamento de RTAs",
+    rtaManagementSubtitle: "Gerencie os RTAs e veja estatísticas de agentes.",
+    addRTA: "Adicionar RTA",
+    deleteRTA: "Excluir RTA",
+    rtaName: "Nome do RTA",
+    rtaEmail: "E-mail do RTA",
+    agentsCount: "Qtd. Agentes",
+    percentage: "Porcentagem",
+    totalAgents: "Total de Agentes",
+    noRTAs: "Nenhum RTA encontrado.",
+    changeRTA: "Alterar RTA",
+    selectRTA: "Selecione o RTA",
+    confirmDeleteRTA: "Tem certeza que deseja excluir este RTA?"
   },
   EN: {
     welcome: "Welcome back",
@@ -225,7 +261,29 @@ const translations = {
     selectEmployee: "Select Employee",
     customSubject: "Custom Subject",
     save: "Save",
-    cancel: "Cancel"
+    cancel: "Cancel",
+    filterByRTA: "Filter by RTA",
+    allRTAs: "All RTAs",
+    responsibleAgent: "Responsible RTA",
+    registeredBy: "Registered by",
+    selectLanguage: "Select Language",
+    selectAll: "Select All",
+    deleteSelected: "Delete Selected",
+    selectedCount: (count: number) => `${count} selected`,
+    management: "Management",
+    rtaManagement: "RTA Management",
+    rtaManagementSubtitle: "Manage RTAs and view agent statistics.",
+    addRTA: "Add RTA",
+    deleteRTA: "Delete RTA",
+    rtaName: "RTA Name",
+    rtaEmail: "RTA Email",
+    agentsCount: "Agents Count",
+    percentage: "Percentage",
+    totalAgents: "Total Agents",
+    noRTAs: "No RTAs found.",
+    changeRTA: "Change RTA",
+    selectRTA: "Select RTA",
+    confirmDeleteRTA: "Are you sure you want to delete this RTA?"
   },
   ES: {
     welcome: "Bienvenido de nuevo",
@@ -285,7 +343,29 @@ const translations = {
     selectEmployee: "Seleccione Agente",
     customSubject: "Asunto Personalizado",
     save: "Guardar",
-    cancel: "Cancelar"
+    cancel: "Cancelar",
+    filterByRTA: "Filtrar por RTA",
+    allRTAs: "Todos los RTAs",
+    responsibleAgent: "RTA Responsable",
+    registeredBy: "Registrado por",
+    selectLanguage: "Seleccionar Idioma",
+    selectAll: "Seleccionar Todos",
+    deleteSelected: "Eliminar Seleccionados",
+    selectedCount: (count: number) => `${count} seleccionado(s)`,
+    management: "Gestión",
+    rtaManagement: "Gestión de RTAs",
+    rtaManagementSubtitle: "Administre los RTAs y vea estadísticas de agentes.",
+    addRTA: "Añadir RTA",
+    deleteRTA: "Eliminar RTA",
+    rtaName: "Nombre del RTA",
+    rtaEmail: "Correo del RTA",
+    agentsCount: "Cant. Agentes",
+    percentage: "Porcentaje",
+    totalAgents: "Total de Agentes",
+    noRTAs: "No se encontraron RTAs.",
+    changeRTA: "Cambiar RTA",
+    selectRTA: "Seleccione el RTA",
+    confirmDeleteRTA: "¿Está seguro de que desea eliminar este RTA?"
   },
   AR: {
     welcome: "مرحباً بعودتك",
@@ -345,7 +425,29 @@ const translations = {
     selectEmployee: "اختر الوكيل",
     customSubject: "موضوع مخصص",
     save: "حفظ",
-    cancel: "إلغاء"
+    cancel: "إلغاء",
+    filterByRTA: "تصفية حسب RTA",
+    allRTAs: "جميع RTAs",
+    responsibleAgent: "RTA المسؤول",
+    registeredBy: "مسجل بواسطة",
+    selectLanguage: "اختر اللغة",
+    selectAll: "تحديد الكل",
+    deleteSelected: "حذف المحدد",
+    selectedCount: (count: number) => `${count} محدد`,
+    management: "الإدارة",
+    rtaManagement: "إدارة RTAs",
+    rtaManagementSubtitle: "إدارة RTAs وعرض إحصائيات الوكلاء.",
+    addRTA: "إضافة RTA",
+    deleteRTA: "حذف RTA",
+    rtaName: "اسم RTA",
+    rtaEmail: "بريد RTA",
+    agentsCount: "عدد الوكلاء",
+    percentage: "النسبة المئوية",
+    totalAgents: "إجمالي الوكلاء",
+    noRTAs: "لم يتم العثور على RTAs.",
+    changeRTA: "تغيير RTA",
+    selectRTA: "اختر RTA",
+    confirmDeleteRTA: "هل أنت متأكد أنك تريد حذف هذا RTA؟"
   }
 };
 
@@ -600,7 +702,7 @@ export default function App() {
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
-  const [activeTab, setActiveTab] = useState<'home' | 'log' | 'history' | 'employees'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'log' | 'history' | 'employees' | 'management'>('home');
   const [language, setLanguage] = useState<'PT' | 'ES' | 'EN' | 'AR'>('PT');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showHistoryPopup, setShowHistoryPopup] = useState<string | null>(null);
@@ -609,9 +711,52 @@ export default function App() {
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddEmployeesExpanded, setIsAddEmployeesExpanded] = useState(false);
+  const [filterByUser, setFilterByUser] = useState('');
+  const [filterByRTA, setFilterByRTA] = useState('');
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  
+  // RTA Management States
+  const [rtaList, setRtaList] = useState<RTA[]>([]);
+  const [newRTAName, setNewRTAName] = useState('');
+  const [newRTAEmail, setNewRTAEmail] = useState('');
+  const [rtaToDelete, setRtaToDelete] = useState<string | null>(null);
+  const [employeeToChangeRTA, setEmployeeToChangeRTA] = useState<string | null>(null);
+  const [selectedNewRTA, setSelectedNewRTA] = useState('');
+  
+  // Multi-select deletion states
+  const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
+  const [showDeleteSelectedModal, setShowDeleteSelectedModal] = useState(false);
+
+  // Mapeamento de RTAs - busca dinamicamente da lista de RTAs
+  const getUserDisplayName = (uid: string) => {
+    // Primeiro, busca na lista de RTAs do Firebase
+    const rta = rtaList.find(r => r.uid === uid || r.email === uid);
+    if (rta) return rta.name;
+    
+    // Fallback para nomes conhecidos
+    const fallbackMap: { [key: string]: string } = {
+      'thiago.toncovitch@concentrix.com': 'Thiago Toncovitch',
+      'houcine.cherrak@concentrix.com': 'Houcine Cherrak'
+    };
+    return fallbackMap[uid] || uid;
+  };
+
+  // Lista de usuários únicos que têm agentes
+  const uniqueUsers = useMemo(() => {
+    const users = new Set(allEmployees.map(emp => emp.createdBy));
+    return Array.from(users).map(uid => ({
+      id: uid,
+      name: getUserDisplayName(uid)
+    }));
+  }, [allEmployees]);
 
   const groupedEmployees = useMemo(() => {
-    const filtered = employees.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    // Primeiro filtra por usuário se selecionado
+    let filteredByUser = filterByUser 
+      ? allEmployees.filter(emp => emp.createdBy === filterByUser)
+      : employees;
+    
+    const filtered = filteredByUser.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const sorted = [...filtered].sort((a, b) => {
       if (sortOrder === 'asc') return a.name.localeCompare(b.name);
       return b.name.localeCompare(a.name);
@@ -624,7 +769,7 @@ export default function App() {
       groups[letter].push(emp);
     });
     return groups;
-  }, [employees, sortOrder, searchQuery]);
+  }, [employees, allEmployees, sortOrder, searchQuery, filterByUser]);
 
   const [selectedLetters, setSelectedLetters] = useState<string[]>(['ALL']);
 
@@ -670,6 +815,19 @@ export default function App() {
 
     const isAdmin = user.email === 'thiago.toncovitch@concentrix.com';
 
+    // Busca lista de RTAs
+    const qRTAs = query(collection(db, 'rtas'), orderBy('name'));
+    const unsubRTAs = onSnapshot(qRTAs, (snapshot) => {
+      setRtaList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RTA)));
+    });
+
+    // Sempre busca todos os employees para o formulário de registro
+    const qAllEmployees = query(collection(db, 'employees'), orderBy('name'));
+    const unsubAllEmployees = onSnapshot(qAllEmployees, (snapshot) => {
+      setAllEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
+    });
+
+    // Employees filtrados pela aba de agentes (por usuário)
     const qEmployees = isAdmin 
       ? query(collection(db, 'employees'), orderBy('name'))
       : query(collection(db, 'employees'), where('createdBy', '==', user.uid), orderBy('name'));
@@ -687,6 +845,8 @@ export default function App() {
     });
 
     return () => {
+      unsubRTAs();
+      unsubAllEmployees();
       unsubEmployees();
       unsubConversations();
     };
@@ -750,7 +910,8 @@ export default function App() {
     e.preventDefault();
     if (!user || !selectedEmployeeId) return;
 
-    const employee = employees.find(emp => emp.id === selectedEmployeeId);
+    // Busca do funcionário em allEmployees (todos os funcionários de todos os usuários)
+    const employee = allEmployees.find(emp => emp.id === selectedEmployeeId);
     if (!employee) return;
 
     const finalSubject = convSubject === 'Others' ? customSubject : convSubject;
@@ -760,10 +921,13 @@ export default function App() {
       await addDoc(collection(db, 'conversations'), {
         employeeId: selectedEmployeeId,
         employeeName: employee.name,
+        employeeOwner: employee.createdBy,
+        employeeOwnerName: getUserDisplayName(employee.createdBy),
         date: `${convDate}T${convTime}:00`,
         subject: finalSubject,
         notes: convNotes,
-        createdBy: user.uid
+        createdBy: user.uid,
+        createdByName: user.displayName
       });
       setConvSubject('Overbreak');
       setCustomSubject('');
@@ -805,9 +969,96 @@ export default function App() {
     return conversations.filter(c => 
       (filterEmployee === '' || c.employeeId === filterEmployee) &&
       (filterDate === '' || format(new Date(c.date), 'yyyy-MM-dd') === filterDate) &&
-      (filterSubject === '' || c.subject === filterSubject)
+      (filterSubject === '' || c.subject === filterSubject) &&
+      (filterByRTA === '' || c.createdBy === filterByRTA || c.employeeOwner === filterByRTA)
     );
-  }, [conversations, filterEmployee, filterDate, filterSubject]);
+  }, [conversations, filterEmployee, filterDate, filterSubject, filterByRTA]);
+
+  // Estatísticas de agentes por RTA
+  const rtaStats = useMemo(() => {
+    const stats: { [key: string]: number } = {};
+    allEmployees.forEach(emp => {
+      stats[emp.createdBy] = (stats[emp.createdBy] || 0) + 1;
+    });
+    return stats;
+  }, [allEmployees]);
+
+  // Funções de gerenciamento de RTAs
+  const addRTA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRTAName.trim() || !newRTAEmail.trim()) return;
+
+    try {
+      await addDoc(collection(db, 'rtas'), {
+        uid: newRTAEmail,
+        email: newRTAEmail,
+        name: newRTAName
+      });
+      setNewRTAName('');
+      setNewRTAEmail('');
+    } catch (err) {
+      console.error("Failed to add RTA", err);
+    }
+  };
+
+  const confirmDeleteRTA = async () => {
+    if (!rtaToDelete) return;
+    try {
+      const docRef = doc(db, 'rtas', rtaToDelete);
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.error("Error deleting RTA:", err);
+    }
+    setRtaToDelete(null);
+  };
+
+  const changeEmployeeRTA = async () => {
+    if (!employeeToChangeRTA || !selectedNewRTA) return;
+    try {
+      const docRef = doc(db, 'employees', employeeToChangeRTA);
+      await updateDoc(docRef, {
+        createdBy: selectedNewRTA
+      });
+    } catch (err) {
+      console.error("Error changing RTA:", err);
+    }
+    setEmployeeToChangeRTA(null);
+    setSelectedNewRTA('');
+  };
+
+  // Multi-select functions
+  const toggleSelectConversation = (id: string) => {
+    setSelectedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedConversations.size === filteredConversations.length) {
+      setSelectedConversations(new Set());
+    } else {
+      setSelectedConversations(new Set(filteredConversations.map(c => c.id)));
+    }
+  };
+
+  const deleteSelectedConversations = async () => {
+    try {
+      const deletePromises = Array.from(selectedConversations).map(id => 
+        deleteDoc(doc(db, 'conversations', id))
+      );
+      await Promise.all(deletePromises);
+      setSelectedConversations(new Set());
+    } catch (err) {
+      console.error("Error deleting conversations:", err);
+    }
+    setShowDeleteSelectedModal(false);
+  };
 
   if (loading) {
     return (
@@ -832,7 +1083,36 @@ export default function App() {
             <History className="text-white w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold text-zinc-900 mb-2">{translations[language].appTitle}</h1>
-          <p className="text-zinc-500 mb-8">{translations[language].appSubtitle}</p>
+          <p className="text-zinc-500 mb-6">{translations[language].appSubtitle}</p>
+          
+          {/* Seletor de Idioma */}
+          <div className="mb-6">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">{translations[language].selectLanguage}</p>
+            <div className="flex justify-center gap-2">
+              {([
+                { code: 'PT', label: 'Português', flag: '🇧🇷' },
+                { code: 'EN', label: 'English', flag: '🇺🇸' },
+                { code: 'ES', label: 'Español', flag: '🇪🇸' },
+                { code: 'AR', label: 'العربية', flag: '🇸🇦' }
+              ] as const).map(({ code, label, flag }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setLanguage(code)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all",
+                    language === code 
+                      ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  )}
+                >
+                  <span className="text-xl">{flag}</span>
+                  <span className="text-xs font-medium">{code}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          
           <form onSubmit={handleLogin} className="flex flex-col gap-4 text-left">
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">Email</label>
@@ -949,6 +1229,20 @@ export default function App() {
               <Users className="w-4 h-4" />
               {translations[language].employees}
             </button>
+            
+            {/* Botão de Gerenciamento - apenas para admin */}
+            {user.email === 'thiago.toncovitch@concentrix.com' && (
+              <button 
+                onClick={() => setActiveTab('management')}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
+                  activeTab === 'management' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                )}
+              >
+                <Settings className="w-4 h-4" />
+                {translations[language].management}
+              </button>
+            )}
 
             <div className="mt-8 pt-8 border-t border-zinc-200">
               <div className="bg-primary/5 p-4 rounded-2xl border border-primary/5">
@@ -1007,13 +1301,21 @@ export default function App() {
                   </div>
 
                   <form onSubmit={addConversation} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Select 
-                      label={translations[language].employee}
-                      value={selectedEmployeeId}
-                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                      options={employees}
-                      placeholder={translations[language].selectEmployee}
-                    />
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].employee}</label>
+                      <select 
+                        value={selectedEmployeeId}
+                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                        className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                      >
+                        <option value="">{translations[language].selectEmployee}</option>
+                        {allEmployees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({getUserDisplayName(emp.createdBy)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex flex-col gap-1.5 w-full">
                       <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].subject}</label>
                       <select 
@@ -1088,14 +1390,35 @@ export default function App() {
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Select 
-                        label={translations[language].filterByEmployee}
-                        value={filterEmployee}
-                        onChange={(e) => setFilterEmployee(e.target.value)}
-                        options={employees}
-                        placeholder={translations[language].all}
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByEmployee}</label>
+                        <select 
+                          value={filterEmployee}
+                          onChange={(e) => setFilterEmployee(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].all}</option>
+                          {allEmployees.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} ({getUserDisplayName(emp.createdBy)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByRTA}</label>
+                        <select 
+                          value={filterByRTA}
+                          onChange={(e) => setFilterByRTA(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].allRTAs}</option>
+                          {uniqueUsers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
                       <Input 
                         label={translations[language].date}
                         type="date"
@@ -1119,9 +1442,33 @@ export default function App() {
                   </div>
 
                   <div className="overflow-x-auto">
+                    {/* Barra de ações para seleção múltipla */}
+                    {selectedConversations.size > 0 && (
+                      <div className="mb-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
+                        <span className="text-sm font-medium text-zinc-700">
+                          {translations[language].selectedCount(selectedConversations.size)}
+                        </span>
+                        <Button 
+                          onClick={() => setShowDeleteSelectedModal(true)}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {translations[language].deleteSelected}
+                        </Button>
+                      </div>
+                    )}
+
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-zinc-50/50">
+                          <th className="px-4 py-4 border-b border-zinc-100">
+                            <input
+                              type="checkbox"
+                              checked={filteredConversations.length > 0 && selectedConversations.size === filteredConversations.length}
+                              onChange={toggleSelectAll}
+                              className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary cursor-pointer"
+                            />
+                          </th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].employee}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].dateTime}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].subject}</th>
@@ -1132,15 +1479,34 @@ export default function App() {
                       <tbody>
                         {filteredConversations.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-6 py-12 text-center text-zinc-400 italic">
+                            <td colSpan={6} className="px-6 py-12 text-center text-zinc-400 italic">
                               {translations[language].noConversations}
                             </td>
                           </tr>
                         ) : (
                           filteredConversations.map((conv) => (
-                            <tr key={conv.id} className="group hover:bg-zinc-50 transition-colors">
+                            <tr key={conv.id} className={cn(
+                              "group hover:bg-zinc-50 transition-colors",
+                              selectedConversations.has(conv.id) && "bg-primary/5"
+                            )}>
+                              <td className="px-4 py-4 border-b border-zinc-100">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedConversations.has(conv.id)}
+                                  onChange={() => toggleSelectConversation(conv.id)}
+                                  className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary cursor-pointer"
+                                />
+                              </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
-                                <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
+                                  <span className="text-xs text-zinc-500">
+                                    {translations[language].responsibleAgent}: {conv.employeeOwnerName || getUserDisplayName(conv.employeeOwner || conv.createdBy)}
+                                  </span>
+                                  <span className="text-xs text-zinc-400">
+                                    {translations[language].registeredBy}: {conv.createdByName || getUserDisplayName(conv.createdBy)}
+                                  </span>
+                                </div>
                               </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <div className="flex flex-col">
@@ -1153,13 +1519,13 @@ export default function App() {
                               </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-sm text-zinc-500 max-w-xs truncate" title={conv.notes}>
+                                  <p className="text-sm text-zinc-500 max-w-[120px] truncate" title={conv.notes}>
                                     {conv.notes || '-'}
                                   </p>
                                   {conv.notes && (
                                     <button 
                                       onClick={() => setShowNotesPopup(conv.id)}
-                                      className="text-xs text-primary font-bold hover:underline"
+                                      className="text-xs text-primary font-bold hover:underline whitespace-nowrap"
                                     >
                                       {translations[language].viewNotes}
                                     </button>
@@ -1254,7 +1620,7 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h2 className="text-lg font-bold text-zinc-900">{translations[language].employeeList}</h2>
-                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(employees.length)}</p>
+                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(Object.values(groupedEmployees).flat().length)}</p>
                         </div>
                         <button 
                           onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
@@ -1263,11 +1629,26 @@ export default function App() {
                           Sort: {sortOrder === 'asc' ? translations[language].sortAsc : translations[language].sortDesc}
                         </button>
                       </div>
-                      <Input
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={translations[language].search}
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={translations[language].search}
+                        />
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByRTA}</label>
+                          <select 
+                            value={filterByUser}
+                            onChange={(e) => setFilterByUser(e.target.value)}
+                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                          >
+                            <option value="">{translations[language].allRTAs}</option>
+                            {uniqueUsers.map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => setSelectedLetters([])}
@@ -1308,6 +1689,9 @@ export default function App() {
                                   <div>
                                     <div className="text-sm font-bold text-zinc-900 flex items-center gap-2">
                                       {emp.name}
+                                      <span className="text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                        {getUserDisplayName(emp.createdBy)}
+                                      </span>
                                       {conversations.filter(c => c.employeeId === emp.id).length >= 3 ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full" title="3+ logs" />
                                       ) : conversations.filter(c => c.employeeId === emp.id).length > 0 ? (
@@ -1341,6 +1725,196 @@ export default function App() {
                           {translations[language].noEmployees}
                         </div>
                       )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Management Tab - Only for Admin */}
+              {activeTab === 'management' && user.email === 'thiago.toncovitch@concentrix.com' && (
+                <motion.div 
+                  key="management"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="space-y-6"
+                >
+                  {/* RTA Stats Card */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                        <Percent className="text-primary w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-zinc-900">{translations[language].rtaManagement}</h2>
+                        <p className="text-sm text-zinc-500">{translations[language].rtaManagementSubtitle}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                      <div className="bg-zinc-50 rounded-xl p-4">
+                        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">{translations[language].totalAgents}</p>
+                        <p className="text-3xl font-bold text-zinc-900">{allEmployees.length}</p>
+                      </div>
+                      <div className="bg-zinc-50 rounded-xl p-4">
+                        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">RTAs</p>
+                        <p className="text-3xl font-bold text-zinc-900">{rtaList.length || uniqueUsers.length}</p>
+                      </div>
+                      <div className="bg-zinc-50 rounded-xl p-4">
+                        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">{translations[language].totalLogs}</p>
+                        <p className="text-3xl font-bold text-zinc-900">{conversations.length}</p>
+                      </div>
+                    </div>
+
+                    {/* Stats by RTA */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-zinc-50/50">
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">RTA</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].agentsCount}</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].percentage}</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100 text-right">{translations[language].actions}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {uniqueUsers.map((u) => {
+                            const count = rtaStats[u.id] || 0;
+                            const percentage = allEmployees.length > 0 ? ((count / allEmployees.length) * 100).toFixed(1) : '0';
+                            return (
+                              <tr key={u.id} className="group hover:bg-zinc-50 transition-colors">
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                                      <UserCog className="w-4 h-4 text-primary" />
+                                    </div>
+                                    <span className="text-sm font-bold text-zinc-900">{u.name}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <span className="text-sm font-medium text-zinc-700">{count}</span>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-24 h-2 bg-zinc-100 rounded-full overflow-hidden">
+                                      <div 
+                                        className="h-full bg-primary rounded-full transition-all"
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-sm font-medium text-zinc-700">{percentage}%</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100 text-right">
+                                  {rtaList.find(r => r.uid === u.id) && (
+                                    <button 
+                                      onClick={() => setRtaToDelete(rtaList.find(r => r.uid === u.id)?.id || null)}
+                                      className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {uniqueUsers.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-6 py-12 text-center text-zinc-400 italic">
+                                {translations[language].noRTAs}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Add RTA Form */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                        <UserPlus className="text-green-600 w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-zinc-900">{translations[language].addRTA}</h2>
+                        <p className="text-sm text-zinc-500">Adicione um novo RTA ao sistema.</p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={addRTA} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Input
+                        label={translations[language].rtaName}
+                        value={newRTAName}
+                        onChange={(e) => setNewRTAName(e.target.value)}
+                        placeholder="Ex: João Silva"
+                      />
+                      <Input
+                        label={translations[language].rtaEmail}
+                        type="email"
+                        value={newRTAEmail}
+                        onChange={(e) => setNewRTAEmail(e.target.value)}
+                        placeholder="Ex: joao.silva@concentrix.com"
+                      />
+                      <div className="flex items-end">
+                        <Button type="submit" className="w-full">
+                          <Plus className="w-4 h-4" />
+                          {translations[language].addRTA}
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Change Agent's RTA */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                        <UserCog className="text-blue-600 w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-zinc-900">{translations[language].changeRTA}</h2>
+                        <p className="text-sm text-zinc-500">Altere o RTA responsável por um agente.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].employee}</label>
+                        <select 
+                          value={employeeToChangeRTA || ''}
+                          onChange={(e) => setEmployeeToChangeRTA(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].selectEmployee}</option>
+                          {allEmployees.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} ({getUserDisplayName(emp.createdBy)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].selectRTA}</label>
+                        <select 
+                          value={selectedNewRTA}
+                          onChange={(e) => setSelectedNewRTA(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].selectRTA}</option>
+                          {uniqueUsers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button 
+                          onClick={changeEmployeeRTA}
+                          disabled={!employeeToChangeRTA || !selectedNewRTA}
+                          className="w-full"
+                        >
+                          {translations[language].save}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -1430,6 +2004,58 @@ export default function App() {
                   {translations[language].cancel}
                 </Button>
                 <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteConversation}>
+                  {translations[language].delete}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete RTA Confirmation Modal */}
+      <AnimatePresence>
+        {rtaToDelete && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            >
+              <h3 className="text-lg font-bold text-zinc-900 mb-2">{translations[language].confirmDeleteRTA}</h3>
+              <p className="text-sm text-zinc-500 mb-6">Os agentes associados a este RTA permanecerão no sistema.</p>
+              <div className="flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setRtaToDelete(null)}>
+                  {translations[language].cancel}
+                </Button>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteRTA}>
+                  {translations[language].delete}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Selected Conversations Modal */}
+      <AnimatePresence>
+        {showDeleteSelectedModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            >
+              <h3 className="text-lg font-bold text-zinc-900 mb-2">{translations[language].deleteSelected}</h3>
+              <p className="text-sm text-zinc-500 mb-6">
+                {translations[language].selectedCount(selectedConversations.size)} - Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setShowDeleteSelectedModal(false)}>
+                  {translations[language].cancel}
+                </Button>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={deleteSelectedConversations}>
                   {translations[language].delete}
                 </Button>
               </div>
