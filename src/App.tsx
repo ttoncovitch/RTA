@@ -49,10 +49,13 @@ interface Conversation {
   id: string;
   employeeId: string;
   employeeName: string;
+  employeeOwner: string;
+  employeeOwnerName: string;
   date: string;
   subject: string;
   notes?: string;
   createdBy: string;
+  createdByName: string;
 }
 
 interface LocalUser {
@@ -165,7 +168,12 @@ const translations = {
     selectEmployee: "Selecione o Agente",
     customSubject: "Assunto Personalizado",
     save: "Salvar",
-    cancel: "Cancelar"
+    cancel: "Cancelar",
+    filterByUser: "Filtrar por Usuário",
+    allUsers: "Todos os Usuários",
+    responsibleAgent: "Agente Responsável",
+    createdByAgent: "Criado por",
+    selectLanguage: "Selecione o Idioma"
   },
   EN: {
     welcome: "Welcome back",
@@ -225,7 +233,12 @@ const translations = {
     selectEmployee: "Select Employee",
     customSubject: "Custom Subject",
     save: "Save",
-    cancel: "Cancel"
+    cancel: "Cancel",
+    filterByUser: "Filter by User",
+    allUsers: "All Users",
+    responsibleAgent: "Responsible Agent",
+    createdByAgent: "Created by",
+    selectLanguage: "Select Language"
   },
   ES: {
     welcome: "Bienvenido de nuevo",
@@ -285,7 +298,12 @@ const translations = {
     selectEmployee: "Seleccione Agente",
     customSubject: "Asunto Personalizado",
     save: "Guardar",
-    cancel: "Cancelar"
+    cancel: "Cancelar",
+    filterByUser: "Filtrar por Usuario",
+    allUsers: "Todos los Usuarios",
+    responsibleAgent: "Agente Responsable",
+    createdByAgent: "Creado por",
+    selectLanguage: "Seleccionar Idioma"
   },
   AR: {
     welcome: "مرحباً بعودتك",
@@ -345,7 +363,12 @@ const translations = {
     selectEmployee: "اختر الوكيل",
     customSubject: "موضوع مخصص",
     save: "حفظ",
-    cancel: "إلغاء"
+    cancel: "إلغاء",
+    filterByUser: "تصفية حسب المستخدم",
+    allUsers: "جميع المستخدمين",
+    responsibleAgent: "الوكيل المسؤول",
+    createdByAgent: "أنشئ بواسطة",
+    selectLanguage: "اختر اللغة"
   }
 };
 
@@ -609,9 +632,35 @@ export default function App() {
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddEmployeesExpanded, setIsAddEmployeesExpanded] = useState(false);
+  const [filterByUser, setFilterByUser] = useState('');
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+
+  // Mapeamento de usuários
+  const usersMap: { [key: string]: string } = {
+    'thiago.toncovitch@concentrix.com': 'Thiago Toncovitch',
+    'houcine.cherrak@concentrix.com': 'Houcine Cherrak'
+  };
+
+  const getUserDisplayName = (uid: string) => {
+    return usersMap[uid] || uid;
+  };
+
+  // Lista de usuários únicos que têm agentes
+  const uniqueUsers = useMemo(() => {
+    const users = new Set(allEmployees.map(emp => emp.createdBy));
+    return Array.from(users).map(uid => ({
+      id: uid,
+      name: getUserDisplayName(uid)
+    }));
+  }, [allEmployees]);
 
   const groupedEmployees = useMemo(() => {
-    const filtered = employees.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    // Primeiro filtra por usuário se selecionado
+    let filteredByUser = filterByUser 
+      ? allEmployees.filter(emp => emp.createdBy === filterByUser)
+      : employees;
+    
+    const filtered = filteredByUser.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const sorted = [...filtered].sort((a, b) => {
       if (sortOrder === 'asc') return a.name.localeCompare(b.name);
       return b.name.localeCompare(a.name);
@@ -624,7 +673,7 @@ export default function App() {
       groups[letter].push(emp);
     });
     return groups;
-  }, [employees, sortOrder, searchQuery]);
+  }, [employees, allEmployees, sortOrder, searchQuery, filterByUser]);
 
   const [selectedLetters, setSelectedLetters] = useState<string[]>(['ALL']);
 
@@ -670,6 +719,13 @@ export default function App() {
 
     const isAdmin = user.email === 'thiago.toncovitch@concentrix.com';
 
+    // Sempre busca todos os employees para o formulário de registro
+    const qAllEmployees = query(collection(db, 'employees'), orderBy('name'));
+    const unsubAllEmployees = onSnapshot(qAllEmployees, (snapshot) => {
+      setAllEmployees(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
+    });
+
+    // Employees filtrados pela aba de agentes (por usuário)
     const qEmployees = isAdmin 
       ? query(collection(db, 'employees'), orderBy('name'))
       : query(collection(db, 'employees'), where('createdBy', '==', user.uid), orderBy('name'));
@@ -687,6 +743,7 @@ export default function App() {
     });
 
     return () => {
+      unsubAllEmployees();
       unsubEmployees();
       unsubConversations();
     };
@@ -750,7 +807,8 @@ export default function App() {
     e.preventDefault();
     if (!user || !selectedEmployeeId) return;
 
-    const employee = employees.find(emp => emp.id === selectedEmployeeId);
+    // Busca do funcionário em allEmployees (todos os funcionários de todos os usuários)
+    const employee = allEmployees.find(emp => emp.id === selectedEmployeeId);
     if (!employee) return;
 
     const finalSubject = convSubject === 'Others' ? customSubject : convSubject;
@@ -760,10 +818,13 @@ export default function App() {
       await addDoc(collection(db, 'conversations'), {
         employeeId: selectedEmployeeId,
         employeeName: employee.name,
+        employeeOwner: employee.createdBy,
+        employeeOwnerName: getUserDisplayName(employee.createdBy),
         date: `${convDate}T${convTime}:00`,
         subject: finalSubject,
         notes: convNotes,
-        createdBy: user.uid
+        createdBy: user.uid,
+        createdByName: user.displayName
       });
       setConvSubject('Overbreak');
       setCustomSubject('');
@@ -832,7 +893,36 @@ export default function App() {
             <History className="text-white w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold text-zinc-900 mb-2">{translations[language].appTitle}</h1>
-          <p className="text-zinc-500 mb-8">{translations[language].appSubtitle}</p>
+          <p className="text-zinc-500 mb-6">{translations[language].appSubtitle}</p>
+          
+          {/* Seletor de Idioma */}
+          <div className="mb-6">
+            <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">{translations[language].selectLanguage}</p>
+            <div className="flex justify-center gap-2">
+              {([
+                { code: 'PT', label: 'Português', flag: '🇧🇷' },
+                { code: 'EN', label: 'English', flag: '🇺🇸' },
+                { code: 'ES', label: 'Español', flag: '🇪🇸' },
+                { code: 'AR', label: 'العربية', flag: '🇸🇦' }
+              ] as const).map(({ code, label, flag }) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setLanguage(code)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all",
+                    language === code 
+                      ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  )}
+                >
+                  <span className="text-xl">{flag}</span>
+                  <span className="text-xs font-medium">{code}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          
           <form onSubmit={handleLogin} className="flex flex-col gap-4 text-left">
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-1">Email</label>
@@ -1007,13 +1097,21 @@ export default function App() {
                   </div>
 
                   <form onSubmit={addConversation} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Select 
-                      label={translations[language].employee}
-                      value={selectedEmployeeId}
-                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                      options={employees}
-                      placeholder={translations[language].selectEmployee}
-                    />
+                    <div className="flex flex-col gap-1.5 w-full">
+                      <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].employee}</label>
+                      <select 
+                        value={selectedEmployeeId}
+                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                        className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                      >
+                        <option value="">{translations[language].selectEmployee}</option>
+                        {allEmployees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.name} ({getUserDisplayName(emp.createdBy)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex flex-col gap-1.5 w-full">
                       <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].subject}</label>
                       <select 
@@ -1089,13 +1187,21 @@ export default function App() {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Select 
-                        label={translations[language].filterByEmployee}
-                        value={filterEmployee}
-                        onChange={(e) => setFilterEmployee(e.target.value)}
-                        options={employees}
-                        placeholder={translations[language].all}
-                      />
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByEmployee}</label>
+                        <select 
+                          value={filterEmployee}
+                          onChange={(e) => setFilterEmployee(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].all}</option>
+                          {allEmployees.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} ({getUserDisplayName(emp.createdBy)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <Input 
                         label={translations[language].date}
                         type="date"
@@ -1140,7 +1246,12 @@ export default function App() {
                           filteredConversations.map((conv) => (
                             <tr key={conv.id} className="group hover:bg-zinc-50 transition-colors">
                               <td className="px-6 py-4 border-b border-zinc-100">
-                                <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
+                                  <span className="text-xs text-zinc-500">
+                                    {translations[language].responsibleAgent}: {conv.employeeOwnerName || getUserDisplayName(conv.employeeOwner || conv.createdBy)}
+                                  </span>
+                                </div>
                               </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <div className="flex flex-col">
@@ -1166,13 +1277,18 @@ export default function App() {
                                   )}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 border-b border-zinc-100 text-right">
-                                <button 
-                                  onClick={() => setConversationToDelete(conv.id)}
-                                  className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                              <td className="px-6 py-4 border-b border-zinc-100">
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className="text-xs text-zinc-400">
+                                    {translations[language].createdByAgent}: {conv.createdByName || getUserDisplayName(conv.createdBy)}
+                                  </span>
+                                  <button 
+                                    onClick={() => setConversationToDelete(conv.id)}
+                                    className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -1254,7 +1370,7 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h2 className="text-lg font-bold text-zinc-900">{translations[language].employeeList}</h2>
-                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(employees.length)}</p>
+                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(Object.values(groupedEmployees).flat().length)}</p>
                         </div>
                         <button 
                           onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
@@ -1263,11 +1379,26 @@ export default function App() {
                           Sort: {sortOrder === 'asc' ? translations[language].sortAsc : translations[language].sortDesc}
                         </button>
                       </div>
-                      <Input
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={translations[language].search}
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder={translations[language].search}
+                        />
+                        <div className="flex flex-col gap-1.5 w-full">
+                          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByUser}</label>
+                          <select 
+                            value={filterByUser}
+                            onChange={(e) => setFilterByUser(e.target.value)}
+                            className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                          >
+                            <option value="">{translations[language].allUsers}</option>
+                            {uniqueUsers.map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => setSelectedLetters([])}
@@ -1308,6 +1439,9 @@ export default function App() {
                                   <div>
                                     <div className="text-sm font-bold text-zinc-900 flex items-center gap-2">
                                       {emp.name}
+                                      <span className="text-xs font-normal text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                                        {getUserDisplayName(emp.createdBy)}
+                                      </span>
                                       {conversations.filter(c => c.employeeId === emp.id).length >= 3 ? (
                                         <div className="w-2 h-2 bg-red-500 rounded-full" title="3+ logs" />
                                       ) : conversations.filter(c => c.employeeId === emp.id).length > 0 ? (
