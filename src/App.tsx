@@ -183,8 +183,11 @@ const translations = {
     filterByRTA: "Filtrar por RTA",
     allRTAs: "Todos os RTAs",
     responsibleAgent: "RTA Responsável",
-    createdByAgent: "Criado por",
+    registeredBy: "Registrado por",
     selectLanguage: "Selecione o Idioma",
+    selectAll: "Selecionar Todos",
+    deleteSelected: "Excluir Selecionados",
+    selectedCount: (count: number) => `${count} selecionado(s)`,
     management: "Gerenciamento",
     rtaManagement: "Gerenciamento de RTAs",
     rtaManagementSubtitle: "Gerencie os RTAs e veja estatísticas de agentes.",
@@ -262,8 +265,11 @@ const translations = {
     filterByRTA: "Filter by RTA",
     allRTAs: "All RTAs",
     responsibleAgent: "Responsible RTA",
-    createdByAgent: "Created by",
+    registeredBy: "Registered by",
     selectLanguage: "Select Language",
+    selectAll: "Select All",
+    deleteSelected: "Delete Selected",
+    selectedCount: (count: number) => `${count} selected`,
     management: "Management",
     rtaManagement: "RTA Management",
     rtaManagementSubtitle: "Manage RTAs and view agent statistics.",
@@ -341,8 +347,11 @@ const translations = {
     filterByRTA: "Filtrar por RTA",
     allRTAs: "Todos los RTAs",
     responsibleAgent: "RTA Responsable",
-    createdByAgent: "Creado por",
+    registeredBy: "Registrado por",
     selectLanguage: "Seleccionar Idioma",
+    selectAll: "Seleccionar Todos",
+    deleteSelected: "Eliminar Seleccionados",
+    selectedCount: (count: number) => `${count} seleccionado(s)`,
     management: "Gestión",
     rtaManagement: "Gestión de RTAs",
     rtaManagementSubtitle: "Administre los RTAs y vea estadísticas de agentes.",
@@ -420,8 +429,11 @@ const translations = {
     filterByRTA: "تصفية حسب RTA",
     allRTAs: "جميع RTAs",
     responsibleAgent: "RTA المسؤول",
-    createdByAgent: "أنشئ بواسطة",
+    registeredBy: "مسجل بواسطة",
     selectLanguage: "اختر اللغة",
+    selectAll: "تحديد الكل",
+    deleteSelected: "حذف المحدد",
+    selectedCount: (count: number) => `${count} محدد`,
     management: "الإدارة",
     rtaManagement: "إدارة RTAs",
     rtaManagementSubtitle: "إدارة RTAs وعرض إحصائيات الوكلاء.",
@@ -710,6 +722,10 @@ export default function App() {
   const [rtaToDelete, setRtaToDelete] = useState<string | null>(null);
   const [employeeToChangeRTA, setEmployeeToChangeRTA] = useState<string | null>(null);
   const [selectedNewRTA, setSelectedNewRTA] = useState('');
+  
+  // Multi-select deletion states
+  const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
+  const [showDeleteSelectedModal, setShowDeleteSelectedModal] = useState(false);
 
   // Mapeamento de RTAs - busca dinamicamente da lista de RTAs
   const getUserDisplayName = (uid: string) => {
@@ -1008,6 +1024,40 @@ export default function App() {
     }
     setEmployeeToChangeRTA(null);
     setSelectedNewRTA('');
+  };
+
+  // Multi-select functions
+  const toggleSelectConversation = (id: string) => {
+    setSelectedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedConversations.size === filteredConversations.length) {
+      setSelectedConversations(new Set());
+    } else {
+      setSelectedConversations(new Set(filteredConversations.map(c => c.id)));
+    }
+  };
+
+  const deleteSelectedConversations = async () => {
+    try {
+      const deletePromises = Array.from(selectedConversations).map(id => 
+        deleteDoc(doc(db, 'conversations', id))
+      );
+      await Promise.all(deletePromises);
+      setSelectedConversations(new Set());
+    } catch (err) {
+      console.error("Error deleting conversations:", err);
+    }
+    setShowDeleteSelectedModal(false);
   };
 
   if (loading) {
@@ -1392,9 +1442,33 @@ export default function App() {
                   </div>
 
                   <div className="overflow-x-auto">
+                    {/* Barra de ações para seleção múltipla */}
+                    {selectedConversations.size > 0 && (
+                      <div className="mb-4 p-4 bg-primary/5 rounded-xl border border-primary/10 flex items-center justify-between">
+                        <span className="text-sm font-medium text-zinc-700">
+                          {translations[language].selectedCount(selectedConversations.size)}
+                        </span>
+                        <Button 
+                          onClick={() => setShowDeleteSelectedModal(true)}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {translations[language].deleteSelected}
+                        </Button>
+                      </div>
+                    )}
+
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-zinc-50/50">
+                          <th className="px-4 py-4 border-b border-zinc-100">
+                            <input
+                              type="checkbox"
+                              checked={filteredConversations.length > 0 && selectedConversations.size === filteredConversations.length}
+                              onChange={toggleSelectAll}
+                              className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary cursor-pointer"
+                            />
+                          </th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].employee}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].dateTime}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].subject}</th>
@@ -1405,18 +1479,32 @@ export default function App() {
                       <tbody>
                         {filteredConversations.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-6 py-12 text-center text-zinc-400 italic">
+                            <td colSpan={6} className="px-6 py-12 text-center text-zinc-400 italic">
                               {translations[language].noConversations}
                             </td>
                           </tr>
                         ) : (
                           filteredConversations.map((conv) => (
-                            <tr key={conv.id} className="group hover:bg-zinc-50 transition-colors">
+                            <tr key={conv.id} className={cn(
+                              "group hover:bg-zinc-50 transition-colors",
+                              selectedConversations.has(conv.id) && "bg-primary/5"
+                            )}>
+                              <td className="px-4 py-4 border-b border-zinc-100">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedConversations.has(conv.id)}
+                                  onChange={() => toggleSelectConversation(conv.id)}
+                                  className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary cursor-pointer"
+                                />
+                              </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <div className="flex flex-col">
                                   <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
                                   <span className="text-xs text-zinc-500">
                                     {translations[language].responsibleAgent}: {conv.employeeOwnerName || getUserDisplayName(conv.employeeOwner || conv.createdBy)}
+                                  </span>
+                                  <span className="text-xs text-zinc-400">
+                                    {translations[language].registeredBy}: {conv.createdByName || getUserDisplayName(conv.createdBy)}
                                   </span>
                                 </div>
                               </td>
@@ -1444,18 +1532,13 @@ export default function App() {
                                   )}
                                 </div>
                               </td>
-                              <td className="px-6 py-4 border-b border-zinc-100">
-                                <div className="flex items-center justify-end gap-2">
-                                  <span className="text-xs text-zinc-400">
-                                    {translations[language].createdByAgent}: {conv.createdByName || getUserDisplayName(conv.createdBy)}
-                                  </span>
-                                  <button 
-                                    onClick={() => setConversationToDelete(conv.id)}
-                                    className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                              <td className="px-6 py-4 border-b border-zinc-100 text-right">
+                                <button 
+                                  onClick={() => setConversationToDelete(conv.id)}
+                                  className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </td>
                             </tr>
                           ))
@@ -1946,6 +2029,33 @@ export default function App() {
                   {translations[language].cancel}
                 </Button>
                 <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteRTA}>
+                  {translations[language].delete}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Selected Conversations Modal */}
+      <AnimatePresence>
+        {showDeleteSelectedModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl"
+            >
+              <h3 className="text-lg font-bold text-zinc-900 mb-2">{translations[language].deleteSelected}</h3>
+              <p className="text-sm text-zinc-500 mb-6">
+                {translations[language].selectedCount(selectedConversations.size)} - Esta ação não pode ser desfeita.
+              </p>
+              <div className="flex justify-end gap-3">
+                <Button variant="ghost" onClick={() => setShowDeleteSelectedModal(false)}>
+                  {translations[language].cancel}
+                </Button>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={deleteSelectedConversations}>
                   {translations[language].delete}
                 </Button>
               </div>
