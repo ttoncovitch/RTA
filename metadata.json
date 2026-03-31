@@ -1,0 +1,7 @@
+{
+  "name": "RTA - Agent's meeting tracker",
+  "description": "A management tool to record and track conversations with employees regarding overbreaks, including date, time, and subject.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

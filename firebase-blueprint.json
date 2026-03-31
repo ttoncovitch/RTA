@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "An employee under management.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The full name of the employee." },
+        "department": { "type": "string", "description": "The department the employee belongs to." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the employee record was created." },
+        "createdBy": { "type": "string", "description": "The UID of the manager who added this employee." }
+      },
+      "required": ["name", "createdBy"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A record of a conversation with an employee regarding overbreaks.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string", "description": "The ID of the employee." },
+        "employeeName": { "type": "string", "description": "The name of the employee (denormalized for easy display)." },
+        "date": { "type": "string", "format": "date-time", "description": "The date and time of the conversation." },
+        "subject": { "type": "string", "description": "The subject of the conversation." },
+        "notes": { "type": "string", "description": "Additional notes about the conversation." },
+        "createdBy": { "type": "string", "description": "The UID of the manager who recorded this conversation." }
+      },
+      "required": ["employeeId", "date", "subject", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Collection of employees."
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Collection of conversation logs."
+    }
+  }
+}
