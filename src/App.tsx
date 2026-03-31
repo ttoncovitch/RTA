@@ -1519,13 +1519,13 @@ export default function App() {
                               </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-sm text-zinc-500 max-w-xs truncate" title={conv.notes}>
+                                  <p className="text-sm text-zinc-500 max-w-[120px] truncate" title={conv.notes}>
                                     {conv.notes || '-'}
                                   </p>
                                   {conv.notes && (
                                     <button 
                                       onClick={() => setShowNotesPopup(conv.id)}
-                                      className="text-xs text-primary font-bold hover:underline"
+                                      className="text-xs text-primary font-bold hover:underline whitespace-nowrap"
                                     >
                                       {translations[language].viewNotes}
                                     </button>
