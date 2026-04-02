@@ -35,7 +35,11 @@ import {
   ChevronDown,
   Calendar,
   Clock,
-  FileText
+  FileText,
+  CheckCircle,
+  XCircle,
+  BarChart3,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -560,6 +564,30 @@ const Select = ({
   </div>
 );
 
+// Toast Component
+const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      className={cn(
+        "fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border",
+        type === 'success' ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"
+      )}
+    >
+      {type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+      <span className="font-medium text-sm">{message}</span>
+      <button onClick={onClose} className="ml-2 hover:opacity-70">×</button>
+    </motion.div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState<LocalUser | null>(null);
   const [email, setEmail] = useState('');
@@ -607,6 +635,17 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddEmployeesExpanded, setIsAddEmployeesExpanded] = useState(false);
 
+  // Toast States
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Change RTA States
+  const [selectedAgentForRTA, setSelectedAgentForRTA] = useState('');
+  const [selectedNewRTA, setSelectedNewRTA] = useState('');
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+  };
+
   const groupedEmployees = useMemo(() => {
     const filtered = employees.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const sorted = [...filtered].sort((a, b) => {
@@ -644,6 +683,55 @@ export default function App() {
         return { name: emp?.name || 'Unknown', count };
       });
   }, [conversations, employees]);
+
+  // Management Statistics - RTAs and their agents
+  const rtaStatistics = useMemo(() => {
+    // Get unique RTAs (users who created employees)
+    const rtaMap = new Map<string, { name: string; agentCount: number }>();
+    
+    employees.forEach(emp => {
+      const rtaName = emp.creatorName || 'Desconhecido';
+      const rtaId = emp.createdBy;
+      
+      if (rtaMap.has(rtaId)) {
+        rtaMap.get(rtaId)!.agentCount++;
+      } else {
+        rtaMap.set(rtaId, { name: rtaName, agentCount: 1 });
+      }
+    });
+
+    const totalAgents = employees.length;
+    const rtaList = Array.from(rtaMap.entries()).map(([id, data]) => ({
+      id,
+      name: data.name,
+      agentCount: data.agentCount,
+      percentage: totalAgents > 0 ? ((data.agentCount / totalAgents) * 100).toFixed(1) : '0'
+    })).sort((a, b) => b.agentCount - a.agentCount);
+
+    return {
+      totalAgents,
+      totalRTAs: rtaMap.size,
+      totalRecords: conversations.length,
+      rtaList
+    };
+  }, [employees, conversations]);
+
+  // Get list of RTAs for dropdown
+  const rtaOptions = useMemo(() => {
+    const rtaSet = new Map<string, string>();
+    employees.forEach(emp => {
+      if (emp.createdBy && emp.creatorName) {
+        rtaSet.set(emp.createdBy, emp.creatorName);
+      }
+    });
+    // Also add all verified users as potential RTAs
+    allUsers.forEach(u => {
+      if (u.isVerified) {
+        rtaSet.set(u.uid, u.displayName);
+      }
+    });
+    return Array.from(rtaSet.entries()).map(([id, name]) => ({ id, name }));
+  }, [employees, allUsers]);
 
   const toggleLetter = (letter: string) => {
     setSelectedLetters(prev => {
@@ -784,11 +872,11 @@ export default function App() {
 
   const handleAddUser = async () => {
     if (confirmText !== 'add') {
-      alert(translations[language].invalidConfirmation);
+      showToast(translations[language].invalidConfirmation, 'error');
       return;
     }
     if (!newUserEmail.trim() || !newUserName.trim() || !newUserPassword.trim()) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+      showToast('Por favor, preencha todos os campos obrigatórios.', 'error');
       return;
     }
     try {
@@ -805,16 +893,16 @@ export default function App() {
       setNewUserPassword('');
       setConfirmText('');
       setUserToVerify(null);
-      alert(translations[language].addSuccess);
+      showToast(translations[language].addSuccess, 'success');
     } catch (err) {
       console.error("Add user failed", err);
-      alert('Erro ao adicionar usuário. Tente novamente.');
+      showToast('Erro ao adicionar usuário. Tente novamente.', 'error');
     }
   };
 
   const handleDeleteUser = async () => {
     if (confirmText !== 'delete') {
-      alert(translations[language].invalidConfirmation);
+      showToast(translations[language].invalidConfirmation, 'error');
       return;
     }
     if (!userToDelete) return;
@@ -822,16 +910,50 @@ export default function App() {
       await deleteDoc(doc(db, 'users', userToDelete.uid));
       setUserToDelete(null);
       setConfirmText('');
+      showToast(translations[language].deleteSuccess, 'success');
     } catch (err) {
       console.error("Delete user failed", err);
+      showToast('Erro ao excluir usuário.', 'error');
     }
   };
 
   const handleVerifyUser = async (uid: string) => {
     try {
       await updateDoc(doc(db, 'users', uid), { isVerified: true });
+      showToast('Usuário verificado com sucesso!', 'success');
     } catch (err) {
       console.error("Verify user failed", err);
+      showToast('Erro ao verificar usuário.', 'error');
+    }
+  };
+
+  // Handle Change RTA for an agent
+  const handleChangeRTA = async () => {
+    if (!selectedAgentForRTA || !selectedNewRTA) {
+      showToast('Selecione um agente e um novo RTA.', 'error');
+      return;
+    }
+
+    try {
+      const newRTAUser = allUsers.find(u => u.uid === selectedNewRTA) || 
+                         rtaOptions.find(r => r.id === selectedNewRTA);
+      
+      if (!newRTAUser) {
+        showToast('RTA não encontrado.', 'error');
+        return;
+      }
+
+      await updateDoc(doc(db, 'employees', selectedAgentForRTA), {
+        createdBy: selectedNewRTA,
+        creatorName: 'name' in newRTAUser ? newRTAUser.name : newRTAUser.displayName
+      });
+
+      setSelectedAgentForRTA('');
+      setSelectedNewRTA('');
+      showToast('RTA do agente alterado com sucesso!', 'success');
+    } catch (err) {
+      console.error("Change RTA failed", err);
+      showToast('Erro ao alterar RTA do agente.', 'error');
     }
   };
 
@@ -1538,78 +1660,198 @@ export default function App() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden"
+                  className="space-y-6"
                 >
-                  <div className="p-8 border-b border-zinc-100 flex flex-col gap-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <h2 className="text-xl font-bold text-zinc-900">{translations[language].userManagement}</h2>
-                        <p className="text-sm text-zinc-500">{translations[language].verifyUsers}</p>
+                  {/* Statistics Section */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                        <BarChart3 className="text-primary w-5 h-5" />
                       </div>
-                      <Button onClick={() => setUserToVerify({ uid: '', email: '', displayName: '' })} variant="primary">
-                        <Plus className="w-4 h-4" />
-                        {translations[language].add}
+                      <div>
+                        <h2 className="text-xl font-bold text-zinc-900">Estatísticas</h2>
+                        <p className="text-sm text-zinc-500">Visão geral do sistema</p>
+                      </div>
+                    </div>
+
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
+                        <p className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1">Total de Agentes</p>
+                        <p className="text-3xl font-bold text-blue-900">{rtaStatistics.totalAgents}</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
+                        <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">Número de RTAs</p>
+                        <p className="text-3xl font-bold text-green-900">{rtaStatistics.totalRTAs}</p>
+                      </div>
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
+                        <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-1">Quantidade de Registros</p>
+                        <p className="text-3xl font-bold text-purple-900">{rtaStatistics.totalRecords}</p>
+                      </div>
+                    </div>
+
+                    {/* RTA List with Stats */}
+                    <div className="border border-zinc-200 rounded-xl overflow-hidden">
+                      <div className="bg-zinc-50 px-6 py-3 border-b border-zinc-200">
+                        <h3 className="text-sm font-bold text-zinc-700 uppercase tracking-wider">RTAs e seus Agentes</h3>
+                      </div>
+                      <div className="divide-y divide-zinc-100">
+                        {rtaStatistics.rtaList.length === 0 ? (
+                          <div className="p-8 text-center text-zinc-400 italic">
+                            Nenhum RTA encontrado.
+                          </div>
+                        ) : (
+                          rtaStatistics.rtaList.map((rta, index) => (
+                            <div key={rta.id} className="px-6 py-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
+                                  {index + 1}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold text-zinc-900">{rta.name}</p>
+                                  <p className="text-xs text-zinc-500">{rta.agentCount} agente{rta.agentCount !== 1 ? 's' : ''}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="w-32 bg-zinc-200 rounded-full h-2 overflow-hidden">
+                                  <div 
+                                    className="bg-primary h-full rounded-full transition-all"
+                                    style={{ width: `${rta.percentage}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-bold text-zinc-700 w-16 text-right">{rta.percentage}%</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Change RTA Section */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-8">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                        <RefreshCw className="text-orange-600 w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-zinc-900">Alterar RTA</h2>
+                        <p className="text-sm text-zinc-500">Modificar o RTA responsável por um agente</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">Agente</label>
+                        <select
+                          value={selectedAgentForRTA}
+                          onChange={(e) => setSelectedAgentForRTA(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all"
+                        >
+                          <option value="">-- Selecionar Agente --</option>
+                          {employees.map(emp => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.name} (RTA atual: {emp.creatorName || 'N/A'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider block mb-1.5">Novo RTA</label>
+                        <select
+                          value={selectedNewRTA}
+                          onChange={(e) => setSelectedNewRTA(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all"
+                        >
+                          <option value="">-- Selecionar Novo RTA --</option>
+                          {rtaOptions.map(rta => (
+                            <option key={rta.id} value={rta.id}>{rta.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <Button 
+                        onClick={handleChangeRTA}
+                        disabled={!selectedAgentForRTA || !selectedNewRTA}
+                        className="whitespace-nowrap"
+                      >
+                        Salvar Alterações
                       </Button>
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-zinc-50/50">
-                          <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">User</th>
-                          <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">Email</th>
-                          <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">Status</th>
-                          <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100 text-right">{translations[language].actions}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allUsers.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-zinc-400 italic">
-                              No users found.
-                            </td>
+                  {/* User Management Section */}
+                  <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+                    <div className="p-8 border-b border-zinc-100 flex flex-col gap-4">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <h2 className="text-xl font-bold text-zinc-900">{translations[language].userManagement}</h2>
+                          <p className="text-sm text-zinc-500">{translations[language].verifyUsers}</p>
+                        </div>
+                        <Button onClick={() => setUserToVerify({ uid: '', email: '', displayName: '' })} variant="primary">
+                          <Plus className="w-4 h-4" />
+                          {translations[language].add}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-zinc-50/50">
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">User</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">Email</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">Status</th>
+                            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100 text-right">{translations[language].actions}</th>
                           </tr>
-                        ) : (
-                          allUsers.map((u) => (
-                            <tr key={u.uid} className="group hover:bg-zinc-50 transition-colors">
-                              <td className="px-6 py-4 border-b border-zinc-100">
-                                <span className="text-sm font-bold text-zinc-900">{u.displayName}</span>
-                              </td>
-                              <td className="px-6 py-4 border-b border-zinc-100">
-                                <span className="text-sm text-zinc-500">{u.email}</span>
-                              </td>
-                              <td className="px-6 py-4 border-b border-zinc-100">
-                                <span className={cn(
-                                  "text-xs font-bold px-2 py-1 rounded-md",
-                                  u.isVerified ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                                )}>
-                                  {u.isVerified ? translations[language].userVerified : translations[language].pendingVerification}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 border-b border-zinc-100 text-right">
-                                <div className="flex justify-end gap-2">
-                                  {!u.isVerified && (
-                                    <button 
-                                      onClick={() => handleVerifyUser(u.uid)}
-                                      className="text-xs text-primary font-bold hover:underline"
-                                    >
-                                      Verify
-                                    </button>
-                                  )}
-                                  <button 
-                                    onClick={() => setUserToDelete(u)}
-                                    className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
+                        </thead>
+                        <tbody>
+                          {allUsers.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-6 py-12 text-center text-zinc-400 italic">
+                                No users found.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            allUsers.map((u) => (
+                              <tr key={u.uid} className="group hover:bg-zinc-50 transition-colors">
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <span className="text-sm font-bold text-zinc-900">{u.displayName}</span>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <span className="text-sm text-zinc-500">{u.email}</span>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100">
+                                  <span className={cn(
+                                    "text-xs font-bold px-2 py-1 rounded-md",
+                                    u.isVerified ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                                  )}>
+                                    {u.isVerified ? translations[language].userVerified : translations[language].pendingVerification}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 border-b border-zinc-100 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    {!u.isVerified && (
+                                      <button 
+                                        onClick={() => handleVerifyUser(u.uid)}
+                                        className="text-xs text-primary font-bold hover:underline"
+                                      >
+                                        Verify
+                                      </button>
+                                    )}
+                                    <button 
+                                      onClick={() => setUserToDelete(u)}
+                                      className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1831,6 +2073,17 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast Notifications */}
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToast(null)} 
+          />
         )}
       </AnimatePresence>
 
