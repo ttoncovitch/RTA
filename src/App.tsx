@@ -43,7 +43,6 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import axios from 'axios';
 
 // --- Types ---
 interface Employee {
@@ -353,52 +352,39 @@ const translations = {
 
 // --- Components ---
 
+// Curiosidades sobre saúde mental e produtividade
+const curiosidades = [
+  { emoji: "🧘", texto: "Pausas de 5 minutos a cada hora podem aumentar sua produtividade em até 13%." },
+  { emoji: "💧", texto: "Beber água regularmente melhora a concentração e reduz a fadiga mental." },
+  { emoji: "🌱", texto: "Ter plantas no ambiente de trabalho pode reduzir o estresse em até 37%." },
+  { emoji: "😊", texto: "Sorrir, mesmo forçadamente, libera endorfinas e melhora o humor." },
+  { emoji: "🎵", texto: "Ouvir música instrumental pode aumentar o foco em tarefas repetitivas." },
+  { emoji: "🚶", texto: "Uma caminhada de 10 minutos pode melhorar seu humor por até 2 horas." },
+  { emoji: "💬", texto: "Conversas positivas com colegas aumentam a satisfação no trabalho em 25%." },
+  { emoji: "🌅", texto: "Exposição à luz natural melhora o sono e aumenta a energia durante o dia." },
+  { emoji: "📵", texto: "Desligar notificações por períodos aumenta a produtividade em até 40%." },
+  { emoji: "🍎", texto: "Lanches saudáveis mantêm os níveis de energia estáveis ao longo do dia." },
+  { emoji: "✍️", texto: "Escrever 3 coisas pelas quais você é grato reduz ansiedade e estresse." },
+  { emoji: "🤝", texto: "Ajudar um colega libera oxitocina, o hormônio do bem-estar." },
+  { emoji: "🧠", texto: "O cérebro funciona melhor com pequenos desafios do que com rotinas monótonas." },
+  { emoji: "🎯", texto: "Definir metas diárias pequenas aumenta a sensação de realização." },
+  { emoji: "😤", texto: "Respirar fundo por 4 segundos, segurar por 4 e soltar por 4 acalma o sistema nervoso." },
+  { emoji: "🏃", texto: "Exercícios físicos regulares podem ser tão eficazes quanto antidepressivos leves." },
+  { emoji: "📚", texto: "Aprender algo novo ativa áreas do cérebro ligadas à felicidade." },
+  { emoji: "🌙", texto: "Dormir 7-8 horas melhora a memória e a tomada de decisões." },
+  { emoji: "🎨", texto: "Atividades criativas, mesmo simples, reduzem os níveis de cortisol." },
+  { emoji: "☕", texto: "Limitar cafeína após as 14h melhora significativamente a qualidade do sono." },
+  { emoji: "🪴", texto: "Olhar para a natureza por 40 segundos já restaura a atenção mental." },
+  { emoji: "🗣️", texto: "Expressar gratidão a colegas fortalece relações e cria ambiente positivo." },
+  { emoji: "📝", texto: "Fazer listas de tarefas reduz a ansiedade e organiza o pensamento." },
+  { emoji: "🎭", texto: "Rir reduz hormônios do estresse e fortalece o sistema imunológico." },
+  { emoji: "🧩", texto: "Variar tarefas ao longo do dia previne o esgotamento mental." }
+];
+
 const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversations: Conversation[], language: 'PT' | 'ES' | 'EN' }) => {
-  const [weather, setWeather] = useState<any>(null);
-  const [time, setTime] = useState(new Date());
-  const [locationName, setLocationName] = useState<string>('');
-
-  // Weather state - only load once on mount
-  const [weatherLoaded, setWeatherLoaded] = useState(false);
-
-  // Update time every minute instead of every second to reduce re-renders
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    // Only fetch weather once
-    if (weatherLoaded) return;
-    
-    const fetchWeather = async () => {
-      try {
-        // Sempre usar Porto - PT
-        const lat = 41.1579;
-        const lon = -8.6291;
-        const weatherApiUrl = import.meta.env.VITE_WEATHER_API_URL || 'https://api.open-meteo.com/v1/forecast';
-        const res = await axios.get(`${weatherApiUrl}?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
-        setWeather(res.data);
-        setLocationName("Porto - PT");
-        setWeatherLoaded(true);
-      } catch (error) {
-        console.error("Failed to fetch weather", error);
-        setWeatherLoaded(true); // Mark as loaded even on error to prevent retries
-      }
-    };
-
-    fetchWeather();
-  }, [weatherLoaded]);
-
-  const getWeatherIcon = (code: number) => {
-    // Simple mapping of WMO weather codes
-    if (code <= 3) return '☀️'; // Clear/Partly cloudy
-    if (code <= 49) return '🌫️'; // Fog
-    if (code <= 69) return '🌧️'; // Rain
-    if (code <= 79) return '❄️'; // Snow
-    if (code <= 99) return '⛈️'; // Thunderstorm
-    return '☁️';
-  };
+  // Select a random curiosity only once on component mount
+  const [curiosidade] = useState(() => curiosidades[Math.floor(Math.random() * curiosidades.length)]);
+  const [currentTime] = useState(new Date());
 
   return (
     <motion.div 
@@ -414,42 +400,29 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
         <p className="text-zinc-500 mb-8">{translations[language].dashboardOverview}</p>
         
         <div className="text-6xl font-bold text-primary tracking-tighter mb-2">
-          {format(time, 'HH:mm')}
+          {format(currentTime, 'HH:mm')}
         </div>
         <div className="text-lg font-medium text-zinc-600 uppercase tracking-widest">
-          {format(time, 'EEEE, MMMM do')}
+          {format(currentTime, 'EEEE, MMMM do')}
         </div>
       </div>
 
-      {/* Weather Forecast Card */}
-      <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
-        <h3 className="text-lg font-bold text-zinc-900 mb-6 flex items-center gap-2">
-          <span className="text-2xl">🌤️</span> {locationName || translations[language].loadingLocation}
+      {/* Você Sabia? Card */}
+      <div className="bg-gradient-to-br from-primary/5 via-blue-50 to-purple-50 rounded-2xl border border-primary/20 p-8 shadow-sm">
+        <h3 className="text-lg font-bold text-primary mb-4 flex items-center gap-2">
+          <span className="text-2xl">💡</span> Você sabia?
         </h3>
         
-        {weather ? (
-          <div className="flex flex-col gap-4">
-            {weather.daily.time.slice(0, 3).map((dateStr: string, index: number) => (
-              <div key={dateStr} className="flex items-center justify-between p-4 bg-zinc-50 rounded-xl">
-                <div className="flex items-center gap-4">
-                  <span className="text-3xl">{getWeatherIcon(weather.daily.weathercode[index])}</span>
-                  <div>
-                    <p className="font-bold text-zinc-900">{index === 0 ? translations[language].today : format(new Date(dateStr), 'EEEE')}</p>
-                    <p className="text-xs text-zinc-500">{format(new Date(dateStr), 'MMM d')}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-zinc-900">{Math.round(weather.daily.temperature_2m_max[index])}°C</p>
-                  <p className="text-xs text-zinc-500">{Math.round(weather.daily.temperature_2m_min[index])}°C</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center text-zinc-400 italic">
-            Loading weather data...
-          </div>
-        )}
+        <div className="flex flex-col items-center text-center py-6">
+          <span className="text-6xl mb-6">{curiosidade.emoji}</span>
+          <p className="text-lg text-zinc-700 leading-relaxed font-medium">
+            {curiosidade.texto}
+          </p>
+        </div>
+        
+        <div className="text-center mt-4">
+          <p className="text-xs text-zinc-400">Atualize a página para uma nova curiosidade</p>
+        </div>
       </div>
 
       {/* Recent Activity Summary */}
