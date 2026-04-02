@@ -655,6 +655,10 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'name' | 'lob' | 'rta'>('name');
   const [filterValue, setFilterValue] = useState('');
 
+  // Multi-select for bulk delete
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   // Toast States
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -1219,6 +1223,38 @@ export default function App() {
     } catch (err) {
       console.error("Failed to delete all employees", err);
       showToast('Erro ao excluir agentes.', 'error');
+    }
+  };
+
+  // Delete selected employees (bulk delete)
+  const deleteSelectedEmployees = async () => {
+    if (selectedAgents.length === 0) return;
+    
+    try {
+      const deletePromises = selectedAgents.map(id => deleteDoc(doc(db, 'employees', id)));
+      await Promise.all(deletePromises);
+      setSelectedAgents([]);
+      setShowBulkDeleteConfirm(false);
+      showToast(`${selectedAgents.length} agentes excluídos com sucesso!`, 'success');
+    } catch (err) {
+      console.error("Failed to delete selected employees", err);
+      showToast('Erro ao excluir agentes selecionados.', 'error');
+    }
+  };
+
+  // Toggle agent selection
+  const toggleAgentSelection = (id: string) => {
+    setSelectedAgents(prev => 
+      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
+    );
+  };
+
+  // Select/Deselect all agents
+  const toggleSelectAll = () => {
+    if (selectedAgents.length === filteredAndSortedEmployees.length) {
+      setSelectedAgents([]);
+    } else {
+      setSelectedAgents(filteredAndSortedEmployees.map(e => e.id));
     }
   };
 
@@ -2164,6 +2200,15 @@ export default function App() {
                           <h2 className="text-lg font-bold text-zinc-900">{translations[language].employeeList}</h2>
                           <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(filteredAndSortedEmployees.length)}</p>
                         </div>
+                        {selectedAgents.length > 0 && (
+                          <button
+                            onClick={() => setShowBulkDeleteConfirm(true)}
+                            className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-colors flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Excluir {selectedAgents.length} selecionado{selectedAgents.length > 1 ? 's' : ''}
+                          </button>
+                        )}
                       </div>
                       
                       {/* Modern Filter Controls */}
@@ -2213,6 +2258,28 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+
+                      {/* Select All */}
+                      <div className="flex items-center gap-3 pt-2 border-t border-zinc-100">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedAgents.length === filteredAndSortedEmployees.length && filteredAndSortedEmployees.length > 0}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm text-zinc-600">
+                            {selectedAgents.length === filteredAndSortedEmployees.length && filteredAndSortedEmployees.length > 0 
+                              ? 'Desmarcar todos' 
+                              : 'Selecionar todos'}
+                          </span>
+                        </label>
+                        {selectedAgents.length > 0 && (
+                          <span className="text-xs text-zinc-400">
+                            ({selectedAgents.length} selecionado{selectedAgents.length > 1 ? 's' : ''})
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     {/* Employee List */}
@@ -2223,8 +2290,20 @@ export default function App() {
                         </div>
                       ) : (
                         filteredAndSortedEmployees.map(emp => (
-                          <div key={emp.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
+                          <div 
+                            key={emp.id} 
+                            className={cn(
+                              "p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors",
+                              selectedAgents.includes(emp.id) && "bg-primary/5"
+                            )}
+                          >
                             <div className="flex items-center gap-4">
+                              <input
+                                type="checkbox"
+                                checked={selectedAgents.includes(emp.id)}
+                                onChange={() => toggleAgentSelection(emp.id)}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                              />
                               <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-blue-100 rounded-full flex items-center justify-center text-primary font-bold">
                                 {emp.name.charAt(0)}
                               </div>
@@ -2763,6 +2842,46 @@ export default function App() {
             type={toast.type} 
             onClose={() => setToast(null)} 
           />
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <AnimatePresence>
+        {showBulkDeleteConfirm && (
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowBulkDeleteConfirm(false)}
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Trash2 className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-zinc-900 mb-2">Confirmar Exclusão</h3>
+                <p className="text-sm text-zinc-500">
+                  Tem certeza que deseja excluir <span className="font-bold text-red-600">{selectedAgents.length}</span> agente{selectedAgents.length > 1 ? 's' : ''}?
+                </p>
+                <p className="text-xs text-zinc-400 mt-2">Esta ação não pode ser desfeita.</p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <Button variant="ghost" onClick={() => setShowBulkDeleteConfirm(false)}>
+                  Cancelar
+                </Button>
+                <Button 
+                  className="bg-red-600 hover:bg-red-700 text-white" 
+                  onClick={deleteSelectedEmployees}
+                >
+                  Excluir {selectedAgents.length} agente{selectedAgents.length > 1 ? 's' : ''}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

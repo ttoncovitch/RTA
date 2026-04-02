@@ -17,10 +17,8 @@ export default defineConfig(({mode}) => {
     },
     server: {
       hmr: false,
-      allowedHosts: 'all',
-      watch: {
-        usePolling: false,
-      },
+      allowedHosts: true,
+      watch: null,
     },
   };
 });
