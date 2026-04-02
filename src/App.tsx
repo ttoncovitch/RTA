@@ -768,7 +768,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    const isAdmin = user.email === 'thiago.toncovitch@concentrix.com';
+    const isAdmin = user.email === import.meta.env.VITE_ADMIN_EMAIL;
 
     if (isAdmin) {
       const qUsers = query(collection(db, 'users'), orderBy('displayName'));
@@ -782,7 +782,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const isAdmin = user.email === 'thiago.toncovitch@concentrix.com';
+    const isAdmin = user.email === import.meta.env.VITE_ADMIN_EMAIL;
 
     const qEmployees = query(collection(db, 'employees'), orderBy('name'));
       
