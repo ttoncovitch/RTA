@@ -659,6 +659,15 @@ export default function App() {
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  // Meeting Registration Wizard States
+  const [wizardStep, setWizardStep] = useState(0); // 0: initial, 1: agent, 2: reason, 3: overbreak details, 4: notes
+  const [wizardAgentId, setWizardAgentId] = useState('');
+  const [wizardReason, setWizardReason] = useState('');
+  const [wizardOverbreakTypes, setWizardOverbreakTypes] = useState<string[]>([]);
+  const [wizardNotes, setWizardNotes] = useState('');
+  const [showAgentSearch, setShowAgentSearch] = useState(false);
+  const [agentSearchQuery, setAgentSearchQuery] = useState('');
+
   // Toast States
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -1301,6 +1310,78 @@ export default function App() {
     }
   };
 
+  // Wizard-based meeting registration
+  const finishWizardRegistration = async () => {
+    if (!user || !wizardAgentId || !wizardReason) {
+      showToast('Preencha todos os campos obrigatórios.', 'error');
+      return;
+    }
+
+    if (wizardReason === 'Overbreak' && wizardOverbreakTypes.length === 0) {
+      showToast('Selecione pelo menos um tipo de overbreak.', 'error');
+      return;
+    }
+
+    const employee = employees.find(emp => emp.id === wizardAgentId);
+    if (!employee) return;
+
+    let finalSubject = wizardReason;
+    if (wizardReason === 'Overbreak' && wizardOverbreakTypes.length > 0) {
+      finalSubject = `Overbreak (${wizardOverbreakTypes.join(', ')})`;
+    }
+
+    try {
+      const now = new Date();
+      await addDoc(collection(db, 'conversations'), {
+        employeeId: wizardAgentId,
+        employeeName: employee.name,
+        employeeLob: employee.lob || employee.department || '-',
+        employeeCreatorName: employee.creatorName || 'Unknown',
+        date: now.toISOString(),
+        subject: finalSubject,
+        notes: wizardNotes,
+        createdBy: user.uid,
+        creatorName: user.displayName
+      });
+
+      // Reset wizard
+      setWizardStep(0);
+      setWizardAgentId('');
+      setWizardReason('');
+      setWizardOverbreakTypes([]);
+      setWizardNotes('');
+      setAgentSearchQuery('');
+      setActiveTab('history');
+      showToast('Reunião registrada com sucesso!', 'success');
+    } catch (err) {
+      console.error("Failed to log conversation", err);
+      showToast('Erro ao registrar reunião.', 'error');
+    }
+  };
+
+  const resetWizard = () => {
+    setWizardStep(0);
+    setWizardAgentId('');
+    setWizardReason('');
+    setWizardOverbreakTypes([]);
+    setWizardNotes('');
+    setAgentSearchQuery('');
+  };
+
+  const toggleOverbreakType = (type: string) => {
+    setWizardOverbreakTypes(prev => 
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
+
+  const filteredAgentsForWizard = useMemo(() => {
+    if (!agentSearchQuery) return employees.slice(0, 10);
+    return employees.filter(emp => 
+      emp.name.toLowerCase().includes(agentSearchQuery.toLowerCase()) ||
+      (emp.lob || '').toLowerCase().includes(agentSearchQuery.toLowerCase())
+    ).slice(0, 10);
+  }, [employees, agentSearchQuery]);
+
   const confirmDeleteConversation = async () => {
     if (!conversationToDelete) return;
     try {
@@ -1731,11 +1812,11 @@ export default function App() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm"
+                  className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm max-w-2xl mx-auto"
                 >
                   <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center">
-                      <MessageSquare className="text-zinc-900 w-5 h-5" />
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-600 rounded-full flex items-center justify-center">
+                      <MessageSquare className="text-white w-5 h-5" />
                     </div>
                     <div>
                       <h2 className="text-xl font-bold text-zinc-900">{translations[language].newMeetingLog}</h2>
@@ -1743,65 +1824,357 @@ export default function App() {
                     </div>
                   </div>
 
-                  <form onSubmit={addConversation} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Select 
-                      label={translations[language].employee}
-                      value={selectedEmployeeId}
-                      onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                      options={employees}
-                      placeholder={translations[language].selectEmployee}
-                    />
-                    <div className="flex flex-col gap-1.5 w-full">
-                      <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].subject}</label>
-                      <select 
-                        value={convSubject}
-                        onChange={(e) => setConvSubject(e.target.value)}
-                        className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                  {/* Progress Steps */}
+                  <div className="flex items-center justify-center gap-2 mb-8">
+                    {[1, 2, 3, 4].map((step) => (
+                      <div key={step} className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all",
+                          wizardStep >= step 
+                            ? "bg-primary text-white" 
+                            : "bg-zinc-100 text-zinc-400"
+                        )}>
+                          {step}
+                        </div>
+                        {step < 4 && (
+                          <div className={cn(
+                            "w-12 h-1 rounded transition-all",
+                            wizardStep > step ? "bg-primary" : "bg-zinc-100"
+                          )} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Step 0: Initial - Big Central Button */}
+                  {wizardStep === 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="text-center py-12"
+                    >
+                      <button
+                        onClick={() => setWizardStep(1)}
+                        className="w-40 h-40 bg-gradient-to-br from-primary via-blue-500 to-purple-600 rounded-3xl flex flex-col items-center justify-center mx-auto shadow-2xl shadow-primary/30 hover:scale-105 transition-transform"
                       >
-                        <option value="Overbreak">{translations[language].overbreak}</option>
-                        <option value="Tardiness">{translations[language].tardiness}</option>
-                        <option value="Others">{translations[language].others}</option>
-                      </select>
-                    </div>
-                    {convSubject === 'Others' && (
-                      <Input 
-                        label={translations[language].customSubject}
-                        value={customSubject}
-                        onChange={(e) => setCustomSubject(e.target.value)}
-                        placeholder="..."
-                        required
-                      />
-                    )}
-                    <Input 
-                      label={translations[language].date}
-                      type="date"
-                      value={convDate}
-                      onChange={(e) => setConvDate(e.target.value)}
-                      required
-                    />
-                    <Input 
-                      label={translations[language].time}
-                      type="time"
-                      value={convTime}
-                      onChange={(e) => setConvTime(e.target.value)}
-                      required
-                    />
-                    <div className="md:col-span-2 flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].notesOptional}</label>
-                      <textarea 
-                        value={convNotes}
-                        onChange={(e) => setConvNotes(e.target.value)}
-                        placeholder="..."
-                        rows={4}
-                        className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all resize-none"
-                      />
-                    </div>
-                    <div className="md:col-span-2 pt-4 border-t border-zinc-100 flex justify-end">
-                      <Button type="submit" className="px-8 py-3">
-                        {translations[language].save}
-                      </Button>
-                    </div>
-                  </form>
+                        <Plus className="w-16 h-16 text-white mb-2" />
+                        <span className="text-white font-bold">Iniciar</span>
+                      </button>
+                      <p className="text-zinc-500 mt-6">Clique para iniciar um novo registro</p>
+                    </motion.div>
+                  )}
+
+                  {/* Step 1: Select Agent */}
+                  {wizardStep === 1 && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-6">
+                        <h3 className="text-lg font-bold text-zinc-900">Selecione o Agente</h3>
+                        <p className="text-sm text-zinc-500">Escolha o agente para este registro</p>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                        <input
+                          value={agentSearchQuery}
+                          onChange={(e) => setAgentSearchQuery(e.target.value)}
+                          placeholder="Buscar agente por nome ou LOB..."
+                          className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-200 rounded-2xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto">
+                        {filteredAgentsForWizard.map(emp => (
+                          <button
+                            key={emp.id}
+                            onClick={() => setWizardAgentId(emp.id)}
+                            className={cn(
+                              "p-4 rounded-xl border text-left transition-all flex items-center gap-4",
+                              wizardAgentId === emp.id 
+                                ? "bg-primary/10 border-primary" 
+                                : "bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+                            )}
+                          >
+                            <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-blue-100 rounded-full flex items-center justify-center text-primary font-bold">
+                              {emp.name.charAt(0)}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold text-zinc-900">{emp.name}</p>
+                              <p className="text-xs text-zinc-500">{emp.lob || emp.department || '-'} • RTA: {emp.creatorName || '-'}</p>
+                            </div>
+                            {wizardAgentId === emp.id && (
+                              <CheckCircle className="w-6 h-6 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="flex justify-between pt-4 border-t border-zinc-100">
+                        <Button variant="ghost" onClick={resetWizard}>
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={() => setWizardStep(2)}
+                          disabled={!wizardAgentId}
+                          className="px-8"
+                        >
+                          Próximo →
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Step 2: Select Reason */}
+                  {wizardStep === 2 && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-6">
+                        <h3 className="text-lg font-bold text-zinc-900">Razão do Registro</h3>
+                        <p className="text-sm text-zinc-500">Selecione o motivo da reunião</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <button
+                          onClick={() => { setWizardReason('Tardiness'); setWizardStep(4); }}
+                          className={cn(
+                            "p-6 rounded-2xl border text-left transition-all",
+                            wizardReason === 'Tardiness'
+                              ? "bg-yellow-50 border-yellow-400"
+                              : "bg-white border-zinc-200 hover:border-yellow-300 hover:bg-yellow-50/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+                              <Clock className="w-6 h-6 text-yellow-600" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-zinc-900">Tardiness</p>
+                              <p className="text-sm text-zinc-500">Atraso no início do expediente</p>
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setWizardReason('Earlier Leave'); setWizardStep(4); }}
+                          className={cn(
+                            "p-6 rounded-2xl border text-left transition-all",
+                            wizardReason === 'Earlier Leave'
+                              ? "bg-orange-50 border-orange-400"
+                              : "bg-white border-zinc-200 hover:border-orange-300 hover:bg-orange-50/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                              <LogOut className="w-6 h-6 text-orange-600" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-zinc-900">Earlier Leave</p>
+                              <p className="text-sm text-zinc-500">Saída antes do horário</p>
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setWizardReason('Overbreak'); setWizardStep(3); }}
+                          className={cn(
+                            "p-6 rounded-2xl border text-left transition-all",
+                            wizardReason === 'Overbreak'
+                              ? "bg-red-50 border-red-400"
+                              : "bg-white border-zinc-200 hover:border-red-300 hover:bg-red-50/50"
+                          )}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                              <ToggleRight className="w-6 h-6 text-red-600" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-zinc-900">Overbreak</p>
+                              <p className="text-sm text-zinc-500">Excesso de tempo de pausa</p>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="flex justify-between pt-4 border-t border-zinc-100">
+                        <Button variant="ghost" onClick={() => setWizardStep(1)}>
+                          ← Voltar
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Step 3: Overbreak Details */}
+                  {wizardStep === 3 && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-6">
+                        <h3 className="text-lg font-bold text-zinc-900">Tipo de Overbreak</h3>
+                        <p className="text-sm text-zinc-500">Selecione um ou mais tipos (obrigatório)</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <button
+                          onClick={() => toggleOverbreakType('Short Break')}
+                          className={cn(
+                            "p-5 rounded-2xl border text-left transition-all",
+                            wizardOverbreakTypes.includes('Short Break')
+                              ? "bg-blue-50 border-blue-400 ring-2 ring-blue-200"
+                              : "bg-white border-zinc-200 hover:border-blue-300"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <Clock className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-zinc-900">Short Break</p>
+                                <p className="text-xs text-zinc-500">Pausa curta</p>
+                              </div>
+                            </div>
+                            {wizardOverbreakTypes.includes('Short Break') && (
+                              <CheckCircle className="w-6 h-6 text-blue-600" />
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => toggleOverbreakType('Meal Break')}
+                          className={cn(
+                            "p-5 rounded-2xl border text-left transition-all",
+                            wizardOverbreakTypes.includes('Meal Break')
+                              ? "bg-green-50 border-green-400 ring-2 ring-green-200"
+                              : "bg-white border-zinc-200 hover:border-green-300"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                <FileText className="w-5 h-5 text-green-600" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-zinc-900">Meal Break</p>
+                                <p className="text-xs text-zinc-500">Pausa para refeição</p>
+                              </div>
+                            </div>
+                            {wizardOverbreakTypes.includes('Meal Break') && (
+                              <CheckCircle className="w-6 h-6 text-green-600" />
+                            )}
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => toggleOverbreakType('Wellness')}
+                          className={cn(
+                            "p-5 rounded-2xl border text-left transition-all",
+                            wizardOverbreakTypes.includes('Wellness')
+                              ? "bg-purple-50 border-purple-400 ring-2 ring-purple-200"
+                              : "bg-white border-zinc-200 hover:border-purple-300"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <Users className="w-5 h-5 text-purple-600" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-zinc-900">Wellness</p>
+                                <p className="text-xs text-zinc-500">Pausa bem-estar</p>
+                              </div>
+                            </div>
+                            {wizardOverbreakTypes.includes('Wellness') && (
+                              <CheckCircle className="w-6 h-6 text-purple-600" />
+                            )}
+                          </div>
+                        </button>
+                      </div>
+
+                      {wizardOverbreakTypes.length > 0 && (
+                        <p className="text-center text-sm text-primary font-medium">
+                          Selecionado: {wizardOverbreakTypes.join(', ')}
+                        </p>
+                      )}
+
+                      <div className="flex justify-between pt-4 border-t border-zinc-100">
+                        <Button variant="ghost" onClick={() => { setWizardStep(2); setWizardOverbreakTypes([]); }}>
+                          ← Voltar
+                        </Button>
+                        <Button 
+                          onClick={() => setWizardStep(4)}
+                          disabled={wizardOverbreakTypes.length === 0}
+                          className="px-8"
+                        >
+                          Próximo →
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Step 4: Notes */}
+                  {wizardStep === 4 && (
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="space-y-6"
+                    >
+                      <div className="text-center mb-6">
+                        <h3 className="text-lg font-bold text-zinc-900">Anotações</h3>
+                        <p className="text-sm text-zinc-500">Adicione detalhes sobre a reunião</p>
+                      </div>
+
+                      {/* Summary */}
+                      <div className="bg-zinc-50 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-zinc-500 uppercase">Agente</span>
+                          <span className="text-sm font-medium text-zinc-900">
+                            {employees.find(e => e.id === wizardAgentId)?.name || '-'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-zinc-500 uppercase">Razão</span>
+                          <span className="text-sm font-medium text-zinc-900">
+                            {wizardReason === 'Overbreak' && wizardOverbreakTypes.length > 0
+                              ? `Overbreak (${wizardOverbreakTypes.join(', ')})`
+                              : wizardReason}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                          Anotações da Reunião (opcional)
+                        </label>
+                        <textarea
+                          value={wizardNotes}
+                          onChange={(e) => setWizardNotes(e.target.value)}
+                          placeholder="Descreva detalhes da conversa, compromissos, observações..."
+                          rows={5}
+                          className="w-full px-4 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                        />
+                      </div>
+
+                      <div className="flex justify-between pt-4 border-t border-zinc-100">
+                        <Button variant="ghost" onClick={() => setWizardStep(wizardReason === 'Overbreak' ? 3 : 2)}>
+                          ← Voltar
+                        </Button>
+                        <Button 
+                          onClick={finishWizardRegistration}
+                          className="px-8 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-700"
+                        >
+                          ✓ Finalizar Registro
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
               )}
 
@@ -2107,14 +2480,14 @@ export default function App() {
                             type="email"
                             value={newAgentEmail}
                             onChange={(e) => setNewAgentEmail(e.target.value)}
-                            placeholder="Ex: joao.silva@empresa.com"
+                            placeholder="nome@concentrix.com"
                             required
                           />
                           <Input 
                             label={translations[language].lob}
                             value={newAgentLob}
                             onChange={(e) => setNewAgentLob(e.target.value)}
-                            placeholder="Ex: Vendas, Suporte, TI"
+                            placeholder="Ex: HTD/FR, LMEG/ES..."
                             required
                           />
                           <Button type="submit" className="w-full justify-center mt-2">
