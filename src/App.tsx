@@ -358,12 +358,19 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
   const [time, setTime] = useState(new Date());
   const [locationName, setLocationName] = useState<string>('');
 
+  // Weather state - only load once on mount
+  const [weatherLoaded, setWeatherLoaded] = useState(false);
+
+  // Update time every minute instead of every second to reduce re-renders
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
+    const timer = setInterval(() => setTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
+    // Only fetch weather once
+    if (weatherLoaded) return;
+    
     const fetchWeather = async () => {
       try {
         // Sempre usar Porto - PT
@@ -373,13 +380,15 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
         const res = await axios.get(`${weatherApiUrl}?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
         setWeather(res.data);
         setLocationName("Porto - PT");
+        setWeatherLoaded(true);
       } catch (error) {
         console.error("Failed to fetch weather", error);
+        setWeatherLoaded(true); // Mark as loaded even on error to prevent retries
       }
     };
 
     fetchWeather();
-  }, []);
+  }, [weatherLoaded]);
 
   const getWeatherIcon = (code: number) => {
     // Simple mapping of WMO weather codes
