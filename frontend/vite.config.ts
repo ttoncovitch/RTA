@@ -16,9 +16,13 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      allowedHosts: [
+        'arabic-cleanup-1.cluster-10.preview.emergentcf.cloud',
+        '.preview.emergentagent.com',
+        '.preview.emergentcf.cloud',
+        'all'
+      ],
     },
   };
 });
