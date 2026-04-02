@@ -14,7 +14,8 @@ import {
   orderBy, 
   deleteDoc,
   doc,
-  updateDoc
+  updateDoc,
+  getDocs
 } from './firebase';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -35,7 +36,16 @@ import {
   FileText,
   Settings,
   UserCog,
-  Percent
+  Percent,
+  User,
+  Moon,
+  Sun,
+  Lock,
+  X,
+  Edit3,
+  Mail,
+  Briefcase,
+  Bell
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -46,6 +56,8 @@ interface Employee {
   id: string;
   name: string;
   department?: string;
+  email?: string;
+  lob?: string;
   createdBy: string;
 }
 
@@ -66,6 +78,9 @@ interface LocalUser {
   uid: string;
   email: string;
   displayName: string;
+  password?: string;
+  isFirstLogin?: boolean;
+  theme?: 'light' | 'dark';
 }
 
 interface RTA {
@@ -201,7 +216,30 @@ const translations = {
     noRTAs: "Nenhum RTA encontrado.",
     changeRTA: "Alterar RTA",
     selectRTA: "Selecione o RTA",
-    confirmDeleteRTA: "Tem certeza que deseja excluir este RTA?"
+    confirmDeleteRTA: "Tem certeza que deseja excluir este RTA?",
+    profile: "Perfil",
+    updateProfile: "Atualizar Perfil",
+    currentPassword: "Senha Atual",
+    newPassword: "Nova Senha",
+    confirmPassword: "Confirmar Senha",
+    changePassword: "Alterar Senha",
+    theme: "Tema",
+    lightMode: "Modo Claro",
+    darkMode: "Modo Escuro",
+    passwordChanged: "Senha alterada com sucesso!",
+    passwordMismatch: "As senhas não coincidem",
+    wrongPassword: "Senha atual incorreta",
+    firstLoginTitle: "Bem-vindo ao Sistema!",
+    firstLoginMessage: "Por segurança, você precisa alterar sua senha padrão.",
+    filterByRegisteredBy: "Filtrar por Registrado por",
+    lob: "LOB",
+    agentEmail: "Email do Agente",
+    editAgent: "Editar Agente",
+    agentProfile: "Perfil do Agente",
+    notificationHistory: "Histórico de Notificações",
+    noNotifications: "Nenhuma notificação encontrada.",
+    addEmail: "Adicionar Email",
+    saveChanges: "Salvar Alterações"
   },
   EN: {
     welcome: "Welcome back",
@@ -283,7 +321,30 @@ const translations = {
     noRTAs: "No RTAs found.",
     changeRTA: "Change RTA",
     selectRTA: "Select RTA",
-    confirmDeleteRTA: "Are you sure you want to delete this RTA?"
+    confirmDeleteRTA: "Are you sure you want to delete this RTA?",
+    profile: "Profile",
+    updateProfile: "Update Profile",
+    currentPassword: "Current Password",
+    newPassword: "New Password",
+    confirmPassword: "Confirm Password",
+    changePassword: "Change Password",
+    theme: "Theme",
+    lightMode: "Light Mode",
+    darkMode: "Dark Mode",
+    passwordChanged: "Password changed successfully!",
+    passwordMismatch: "Passwords do not match",
+    wrongPassword: "Current password is incorrect",
+    firstLoginTitle: "Welcome to the System!",
+    firstLoginMessage: "For security, you need to change your default password.",
+    filterByRegisteredBy: "Filter by Registered by",
+    lob: "LOB",
+    agentEmail: "Agent Email",
+    editAgent: "Edit Agent",
+    agentProfile: "Agent Profile",
+    notificationHistory: "Notification History",
+    noNotifications: "No notifications found.",
+    addEmail: "Add Email",
+    saveChanges: "Save Changes"
   },
   ES: {
     welcome: "Bienvenido de nuevo",
@@ -365,7 +426,30 @@ const translations = {
     noRTAs: "No se encontraron RTAs.",
     changeRTA: "Cambiar RTA",
     selectRTA: "Seleccione el RTA",
-    confirmDeleteRTA: "¿Está seguro de que desea eliminar este RTA?"
+    confirmDeleteRTA: "¿Está seguro de que desea eliminar este RTA?",
+    profile: "Perfil",
+    updateProfile: "Actualizar Perfil",
+    currentPassword: "Contraseña Actual",
+    newPassword: "Nueva Contraseña",
+    confirmPassword: "Confirmar Contraseña",
+    changePassword: "Cambiar Contraseña",
+    theme: "Tema",
+    lightMode: "Modo Claro",
+    darkMode: "Modo Oscuro",
+    passwordChanged: "¡Contraseña cambiada con éxito!",
+    passwordMismatch: "Las contraseñas no coinciden",
+    wrongPassword: "Contraseña actual incorrecta",
+    firstLoginTitle: "¡Bienvenido al Sistema!",
+    firstLoginMessage: "Por seguridad, necesita cambiar su contraseña predeterminada.",
+    filterByRegisteredBy: "Filtrar por Registrado por",
+    lob: "LOB",
+    agentEmail: "Correo del Agente",
+    editAgent: "Editar Agente",
+    agentProfile: "Perfil del Agente",
+    notificationHistory: "Historial de Notificaciones",
+    noNotifications: "No se encontraron notificaciones.",
+    addEmail: "Añadir Correo",
+    saveChanges: "Guardar Cambios"
   },
   AR: {
     welcome: "مرحباً بعودتك",
@@ -404,7 +488,7 @@ const translations = {
     actions: "إجراءات",
     fullNamesLine: "الأسماء الكاملة (اسم واحد في كل سطر)",
     employeeList: "قائمة الوكلاء",
-    employeeListSubtitle: (count: number) => `لديك ${count} وكلاء تحت إدارتك.`,
+    employeeListSubtitle: (count: number) => `لديك ${count} وكلاء تحت إدا��تك.`,
     noDepartment: "بدون قسم",
     close: "إغلاق",
     add: "إضافة",
@@ -447,7 +531,30 @@ const translations = {
     noRTAs: "لم يتم العثور على RTAs.",
     changeRTA: "تغيير RTA",
     selectRTA: "اختر RTA",
-    confirmDeleteRTA: "هل أنت متأكد أنك تريد حذف هذا RTA؟"
+    confirmDeleteRTA: "هل أنت متأكد أنك تريد حذف هذا RTA؟",
+    profile: "الملف الشخصي",
+    updateProfile: "تحديث الملف الشخصي",
+    currentPassword: "كلمة المرور الحالية",
+    newPassword: "كلمة المرور الجديدة",
+    confirmPassword: "تأكيد كلمة المرور",
+    changePassword: "تغيير كلمة المرور",
+    theme: "السمة",
+    lightMode: "الوضع الفاتح",
+    darkMode: "الوضع الداكن",
+    passwordChanged: "تم تغيير كلمة المرور بنجاح!",
+    passwordMismatch: "كلمات المرور غير متطابقة",
+    wrongPassword: "كلمة المرور الحالية غير صحيحة",
+    firstLoginTitle: "مرحباً بك في النظام!",
+    firstLoginMessage: "للأمان، تحتاج إلى تغيير كلمة المرور الافتراضية.",
+    filterByRegisteredBy: "تصفية حسب المسجل",
+    lob: "LOB",
+    agentEmail: "بريد الوكيل",
+    editAgent: "تعديل الوكيل",
+    agentProfile: "ملف الوكيل",
+    notificationHistory: "سجل الإشعارات",
+    noNotifications: "لم يتم العثور على إشعارات.",
+    addEmail: "إضافة بريد",
+    saveChanges: "حفظ التغييرات"
   }
 };
 
@@ -531,7 +638,7 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
       </div>
 
       {/* Weather Forecast Card */}
-      <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+      <div className={cn("rounded-2xl border p-8 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
         <h3 className="text-lg font-bold text-zinc-900 mb-6 flex items-center gap-2">
           <span className="text-2xl">🌤️</span> {locationName || translations[language].loadingLocation}
         </h3>
@@ -727,6 +834,29 @@ export default function App() {
   const [selectedConversations, setSelectedConversations] = useState<Set<string>>(new Set());
   const [showDeleteSelectedModal, setShowDeleteSelectedModal] = useState(false);
 
+  // Profile and theme states
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showFirstLoginModal, setShowFirstLoginModal] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPasswordProfile, setNewPasswordProfile] = useState('');
+  const [confirmPasswordProfile, setConfirmPasswordProfile] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  
+  // Filter by registered by
+  const [filterByRegisteredBy, setFilterByRegisteredBy] = useState('');
+  
+  // Agent management states
+  const [showAgentProfilePopup, setShowAgentProfilePopup] = useState<string | null>(null);
+  const [editingAgent, setEditingAgent] = useState<string | null>(null);
+  const [editAgentName, setEditAgentName] = useState('');
+  const [editAgentEmail, setEditAgentEmail] = useState('');
+  const [editAgentLOB, setEditAgentLOB] = useState('');
+  const [newAgentLOB, setNewAgentLOB] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+
   // Mapeamento de RTAs - busca dinamicamente da lista de RTAs
   const getUserDisplayName = (uid: string) => {
     // Primeiro, busca na lista de RTAs do Firebase
@@ -805,7 +935,21 @@ export default function App() {
   useEffect(() => {
     const stored = localStorage.getItem('localUser');
     if (stored) {
-      setUser(JSON.parse(stored));
+      const parsedUser = JSON.parse(stored);
+      setUser(parsedUser);
+      // Check for first login
+      if (parsedUser.isFirstLogin) {
+        setShowFirstLoginModal(true);
+      }
+      // Load theme
+      if (parsedUser.theme) {
+        setTheme(parsedUser.theme);
+      }
+    }
+    // Load theme from localStorage
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      setTheme(storedTheme);
     }
     setLoading(false);
   }, []);
@@ -856,22 +1000,219 @@ export default function App() {
     e.preventDefault();
     setLoginError('');
     
-    if (email === 'thiago.toncovitch@concentrix.com' && password === '1234') {
-      const mockUser = { uid: email, email, displayName: 'Thiago Toncovitch' };
-      localStorage.setItem('localUser', JSON.stringify(mockUser));
-      setUser(mockUser);
-    } else if (email === 'houcine.cherrak@concentrix.com' && password === '1234') {
-      const mockUser = { uid: email, email, displayName: 'Houcine Cherrak' };
-      localStorage.setItem('localUser', JSON.stringify(mockUser));
-      setUser(mockUser);
-    } else {
-      setLoginError(translations[language].noConversations || 'Invalid email or password');
+    // Busca usuários salvos no localStorage
+    const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '{}');
+    
+    // Conta principal (admin)
+    if (email === 'thiago.toncovitch@concentrix.com') {
+      const savedUser = savedUsers[email];
+      const expectedPassword = savedUser?.password || '1234';
+      
+      if (password === expectedPassword) {
+        const isFirstLogin = !savedUser || savedUser.isFirstLogin !== false;
+        const mockUser: LocalUser = { 
+          uid: email, 
+          email, 
+          displayName: savedUser?.displayName || 'Thiago Toncovitch',
+          password: expectedPassword,
+          isFirstLogin: isFirstLogin && password === '1234',
+          theme: savedUser?.theme || 'light'
+        };
+        localStorage.setItem('localUser', JSON.stringify(mockUser));
+        setUser(mockUser);
+        if (mockUser.isFirstLogin) {
+          setShowFirstLoginModal(true);
+        }
+        if (mockUser.theme) {
+          setTheme(mockUser.theme);
+        }
+      } else {
+        setLoginError('Email ou senha inválidos');
+      }
+      return;
     }
+    
+    // Busca o RTA no Firebase ou localStorage
+    const savedUser = savedUsers[email];
+    if (savedUser) {
+      const expectedPassword = savedUser.password || '1234';
+      if (password === expectedPassword) {
+        const isFirstLogin = savedUser.isFirstLogin !== false && password === '1234';
+        const mockUser: LocalUser = {
+          uid: email,
+          email,
+          displayName: savedUser.displayName,
+          password: expectedPassword,
+          isFirstLogin,
+          theme: savedUser.theme || 'light'
+        };
+        localStorage.setItem('localUser', JSON.stringify(mockUser));
+        setUser(mockUser);
+        if (isFirstLogin) {
+          setShowFirstLoginModal(true);
+        }
+        if (mockUser.theme) {
+          setTheme(mockUser.theme);
+        }
+        return;
+      }
+    }
+    
+    // Busca o RTA no Firebase diretamente
+    try {
+      const rtaQuery = query(collection(db, 'rtas'), where('email', '==', email));
+      const rtaSnapshot = await getDocs(rtaQuery);
+      
+      if (!rtaSnapshot.empty && password === '1234') {
+        const rtaData = rtaSnapshot.docs[0].data();
+        const mockUser: LocalUser = {
+          uid: email,
+          email,
+          displayName: rtaData.name,
+          password: '1234',
+          isFirstLogin: true,
+          theme: 'light'
+        };
+        
+        // Salva o usuário no localStorage para próximos logins
+        savedUsers[email] = mockUser;
+        localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
+        localStorage.setItem('localUser', JSON.stringify(mockUser));
+        setUser(mockUser);
+        setShowFirstLoginModal(true);
+        return;
+      }
+    } catch (err) {
+      console.error("Error checking RTA:", err);
+    }
+    
+    setLoginError('Email ou senha inválidos');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('localUser');
     setUser(null);
+  };
+
+  // Profile functions
+  const openProfileModal = () => {
+    if (user) {
+      setProfileName(user.displayName);
+      setCurrentPassword('');
+      setNewPasswordProfile('');
+      setConfirmPasswordProfile('');
+      setProfileError('');
+      setProfileSuccess('');
+      setShowProfileModal(true);
+    }
+  };
+
+  const handleChangePassword = () => {
+    if (!user) return;
+    setProfileError('');
+    setProfileSuccess('');
+
+    // Get saved users
+    const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '{}');
+    const savedUser = savedUsers[user.email] || user;
+    const expectedPassword = savedUser.password || '1234';
+
+    if (currentPassword !== expectedPassword) {
+      setProfileError(translations[language].wrongPassword);
+      return;
+    }
+
+    if (newPasswordProfile !== confirmPasswordProfile) {
+      setProfileError(translations[language].passwordMismatch);
+      return;
+    }
+
+    if (newPasswordProfile.length < 4) {
+      setProfileError('A senha deve ter pelo menos 4 caracteres');
+      return;
+    }
+
+    // Update password
+    const updatedUser = {
+      ...user,
+      password: newPasswordProfile,
+      isFirstLogin: false
+    };
+
+    savedUsers[user.email] = updatedUser;
+    localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
+    localStorage.setItem('localUser', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    setProfileSuccess(translations[language].passwordChanged);
+    setCurrentPassword('');
+    setNewPasswordProfile('');
+    setConfirmPasswordProfile('');
+  };
+
+  const handleFirstLoginPasswordChange = () => {
+    if (!user) return;
+    setProfileError('');
+
+    if (newPasswordProfile !== confirmPasswordProfile) {
+      setProfileError(translations[language].passwordMismatch);
+      return;
+    }
+
+    if (newPasswordProfile.length < 4) {
+      setProfileError('A senha deve ter pelo menos 4 caracteres');
+      return;
+    }
+
+    // Update password and mark first login as complete
+    const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '{}');
+    const updatedUser = {
+      ...user,
+      password: newPasswordProfile,
+      isFirstLogin: false
+    };
+
+    savedUsers[user.email] = updatedUser;
+    localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
+    localStorage.setItem('localUser', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    setShowFirstLoginModal(false);
+    setNewPasswordProfile('');
+    setConfirmPasswordProfile('');
+  };
+
+  const handleUpdateProfile = () => {
+    if (!user) return;
+
+    const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '{}');
+    const updatedUser = {
+      ...user,
+      displayName: profileName
+    };
+
+    savedUsers[user.email] = {
+      ...savedUsers[user.email],
+      displayName: profileName
+    };
+
+    localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
+    localStorage.setItem('localUser', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+    setProfileSuccess('Perfil atualizado com sucesso!');
+  };
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    
+    if (user) {
+      const savedUsers = JSON.parse(localStorage.getItem('savedUsers') || '{}');
+      const updatedUser = { ...user, theme: newTheme };
+      savedUsers[user.email] = { ...savedUsers[user.email], theme: newTheme };
+      localStorage.setItem('savedUsers', JSON.stringify(savedUsers));
+      localStorage.setItem('localUser', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
   };
 
   const addEmployees = async (e: React.FormEvent) => {
@@ -885,12 +1226,16 @@ export default function App() {
         await addDoc(collection(db, 'employees'), {
           name,
           department: newEmployeeDept,
+          lob: newAgentLOB,
+          email: newAgentEmail,
           createdBy: user.uid,
           createdAt: new Date().toISOString()
         });
       }
       setNewEmployeeNames('');
       setNewEmployeeDept('');
+      setNewAgentLOB('');
+      setNewAgentEmail('');
     } catch (err) {
       console.error("Failed to add employees", err);
     }
@@ -970,9 +1315,10 @@ export default function App() {
       (filterEmployee === '' || c.employeeId === filterEmployee) &&
       (filterDate === '' || format(new Date(c.date), 'yyyy-MM-dd') === filterDate) &&
       (filterSubject === '' || c.subject === filterSubject) &&
-      (filterByRTA === '' || c.createdBy === filterByRTA || c.employeeOwner === filterByRTA)
+      (filterByRTA === '' || c.employeeOwner === filterByRTA) &&
+      (filterByRegisteredBy === '' || c.createdBy === filterByRegisteredBy)
     );
-  }, [conversations, filterEmployee, filterDate, filterSubject, filterByRTA]);
+  }, [conversations, filterEmployee, filterDate, filterSubject, filterByRTA, filterByRegisteredBy]);
 
   // Estatísticas de agentes por RTA
   const rtaStats = useMemo(() => {
@@ -1024,6 +1370,40 @@ export default function App() {
     }
     setEmployeeToChangeRTA(null);
     setSelectedNewRTA('');
+  };
+
+  // Agent edit functions
+  const openEditAgent = (emp: Employee) => {
+    setEditingAgent(emp.id);
+    setEditAgentName(emp.name);
+    setEditAgentEmail(emp.email || '');
+    setEditAgentLOB(emp.lob || '');
+  };
+
+  const saveAgentChanges = async () => {
+    if (!editingAgent) return;
+    try {
+      const docRef = doc(db, 'employees', editingAgent);
+      await updateDoc(docRef, {
+        name: editAgentName,
+        email: editAgentEmail,
+        lob: editAgentLOB
+      });
+    } catch (err) {
+      console.error("Error updating agent:", err);
+    }
+    setEditingAgent(null);
+    setEditAgentName('');
+    setEditAgentEmail('');
+    setEditAgentLOB('');
+  };
+
+  const openAgentProfile = (empId: string) => {
+    setShowAgentProfilePopup(empId);
+  };
+
+  const getAgentNotifications = (empId: string) => {
+    return conversations.filter(c => c.employeeId === empId);
   };
 
   // Multi-select functions
@@ -1147,36 +1527,49 @@ export default function App() {
   }
 
   return (
-    <div dir={language === 'AR' ? 'rtl' : 'ltr'} className="min-h-screen bg-zinc-50 flex flex-col">
+    <div dir={language === 'AR' ? 'rtl' : 'ltr'} className={cn("min-h-screen flex flex-col transition-colors", theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-50')}>
       {/* Header */}
-      <header className="bg-white border-bottom border-zinc-200 px-6 py-4 sticky top-0 z-10">
+      <header className={cn("border-bottom px-6 py-4 sticky top-0 z-10", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
               <ToggleRight className="text-white w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-zinc-900 leading-tight">{translations[language].appTitle}</h1>
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">{translations[language].managerDashboard}</p>
+              <h1 className={cn("text-lg font-bold leading-tight", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{translations[language].appTitle}</h1>
+              <p className={cn("text-xs font-medium uppercase tracking-wider", theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500')}>{translations[language].managerDashboard}</p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col items-end">
-              <p className="text-sm font-medium text-zinc-900">{user.displayName}</p>
-              <p className="text-xs text-zinc-500">{user.email}</p>
+              <p className={cn("text-sm font-medium", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{user.displayName}</p>
+              <p className={cn("text-xs", theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500')}>{user.email}</p>
+              <button 
+                onClick={openProfileModal}
+                className="text-xs font-medium text-primary hover:text-primary/80 mt-1 flex items-center gap-1"
+              >
+                <User className="w-3 h-3" />
+                {translations[language].profile}
+              </button>
               <div className="flex gap-1 mt-1">
                 {(['PT', 'ES', 'EN', 'AR'] as const).map(lang => (
                   <button 
                     key={lang} 
                     onClick={() => setLanguage(lang)}
-                    className={`text-[10px] font-bold uppercase ${language === lang ? 'text-primary' : 'text-zinc-400 hover:text-zinc-600'}`}
+                    className={`text-[10px] font-bold uppercase ${language === lang ? 'text-primary' : theme === 'dark' ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-400 hover:text-zinc-600'}`}
                   >
                     {lang}
                   </button>
                 ))}
               </div>
             </div>
+            <button 
+              onClick={toggleTheme}
+              className={cn("p-2 rounded-lg transition-colors", theme === 'dark' ? 'text-yellow-400 hover:bg-zinc-700' : 'text-zinc-600 hover:bg-zinc-100')}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <Button onClick={handleLogout} variant="ghost" className="p-2">
               <LogOut className="w-5 h-5" />
             </Button>
@@ -1193,7 +1586,7 @@ export default function App() {
               onClick={() => setActiveTab('home')}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                activeTab === 'home' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                activeTab === 'home' ? "bg-primary text-white shadow-lg shadow-primary/20" : theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800 hover:text-white" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
               )}
             >
               <Calendar className="w-4 h-4" />
@@ -1203,7 +1596,7 @@ export default function App() {
               onClick={() => setActiveTab('log')}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                activeTab === 'log' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                activeTab === 'log' ? "bg-primary text-white shadow-lg shadow-primary/20" : theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800 hover:text-white" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
               )}
             >
               <MessageSquare className="w-4 h-4" />
@@ -1213,7 +1606,7 @@ export default function App() {
               onClick={() => setActiveTab('history')}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                activeTab === 'history' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                activeTab === 'history' ? "bg-primary text-white shadow-lg shadow-primary/20" : theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800 hover:text-white" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
               )}
             >
               <History className="w-4 h-4" />
@@ -1223,7 +1616,7 @@ export default function App() {
               onClick={() => setActiveTab('employees')}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                activeTab === 'employees' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                activeTab === 'employees' ? "bg-primary text-white shadow-lg shadow-primary/20" : theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800 hover:text-white" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
               )}
             >
               <Users className="w-4 h-4" />
@@ -1236,7 +1629,7 @@ export default function App() {
                 onClick={() => setActiveTab('management')}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
-                  activeTab === 'management' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+                  activeTab === 'management' ? "bg-primary text-white shadow-lg shadow-primary/20" : theme === 'dark' ? "text-zinc-400 hover:bg-zinc-800 hover:text-white" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
                 )}
               >
                 <Settings className="w-4 h-4" />
@@ -1244,25 +1637,25 @@ export default function App() {
               </button>
             )}
 
-            <div className="mt-8 pt-8 border-t border-zinc-200">
-              <div className="bg-primary/5 p-4 rounded-2xl border border-primary/5">
-                <h3 className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-4">{translations[language].quickStats}</h3>
+            <div className={cn("mt-8 pt-8 border-t", theme === 'dark' ? 'border-zinc-700' : 'border-zinc-200')}>
+              <div className={cn("p-4 rounded-2xl border", theme === 'dark' ? 'bg-zinc-800/50 border-zinc-700' : 'bg-primary/5 border-primary/5')}>
+                <h3 className={cn("text-xs font-bold uppercase tracking-widest mb-4", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{translations[language].quickStats}</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-zinc-500">{translations[language].totalLogs}</span>
-                    <span className="text-sm font-bold text-zinc-900">{conversations.length}</span>
+                    <span className={cn("text-xs", theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500')}>{translations[language].totalLogs}</span>
+                    <span className={cn("text-sm font-bold", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{conversations.length}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-zinc-500">{translations[language].notifiedAgents}</span>
-                    <span className="text-sm font-bold text-zinc-900">{notifiedEmployeesCount}</span>
+                    <span className={cn("text-xs", theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500')}>{translations[language].notifiedAgents}</span>
+                    <span className={cn("text-sm font-bold", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{notifiedEmployeesCount}</span>
                   </div>
-                  <div className="pt-2 border-t border-primary/10">
-                    <span className="text-xs font-bold text-zinc-900 uppercase tracking-widest mb-2 block">{translations[language].top3Notified}</span>
+                  <div className={cn("pt-2 border-t", theme === 'dark' ? 'border-zinc-700' : 'border-primary/10')}>
+                    <span className={cn("text-xs font-bold uppercase tracking-widest mb-2 block", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{translations[language].top3Notified}</span>
                     <div className="space-y-1">
                       {top3NotifiedEmployees.map((emp, i) => (
                         <div key={i} className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-600 truncate max-w-[120px]">{emp.name}</span>
-                          <span className="font-bold text-zinc-900">{emp.count}</span>
+                          <span className={cn("truncate max-w-[120px]", theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600')}>{emp.name}</span>
+                          <span className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>{emp.count}</span>
                         </div>
                       ))}
                       {top3NotifiedEmployees.length === 0 && (
@@ -1288,7 +1681,7 @@ export default function App() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm"
+className={cn("rounded-2xl border p-8 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}
                 >
                   <div className="flex items-center gap-3 mb-8">
                     <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center">
@@ -1376,7 +1769,7 @@ export default function App() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  className="bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden"
+                  className={cn("rounded-2xl border shadow-sm overflow-hidden", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}
                 >
                   <div className="p-8 border-b border-zinc-100 flex flex-col gap-4">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1390,7 +1783,7 @@ export default function App() {
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="flex flex-col gap-1.5 w-full">
                         <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByEmployee}</label>
                         <select 
@@ -1407,7 +1800,7 @@ export default function App() {
                         </select>
                       </div>
                       <div className="flex flex-col gap-1.5 w-full">
-                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByRTA}</label>
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].responsibleAgent}</label>
                         <select 
                           value={filterByRTA}
                           onChange={(e) => setFilterByRTA(e.target.value)}
@@ -1419,6 +1812,21 @@ export default function App() {
                           ))}
                         </select>
                       </div>
+                      <div className="flex flex-col gap-1.5 w-full">
+                        <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].filterByRegisteredBy}</label>
+                        <select 
+                          value={filterByRegisteredBy}
+                          onChange={(e) => setFilterByRegisteredBy(e.target.value)}
+                          className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all cursor-pointer"
+                        >
+                          <option value="">{translations[language].allRTAs}</option>
+                          {uniqueUsers.map(u => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                       <Input 
                         label={translations[language].date}
                         type="date"
@@ -1558,7 +1966,7 @@ export default function App() {
                   className="grid grid-cols-1 md:grid-cols-12 gap-8"
                 >
                   <div className="md:col-span-4 flex flex-col gap-6">
-                    <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                    <div className={cn("rounded-2xl border p-6 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                       <button 
                         onClick={() => setIsAddEmployeesExpanded(!isAddEmployeesExpanded)}
                         className="w-full flex items-center justify-between text-lg font-bold text-zinc-900 mb-6"
@@ -1577,9 +1985,24 @@ export default function App() {
                               value={newEmployeeNames}
                               onChange={(e) => setNewEmployeeNames(e.target.value)}
                               placeholder="e.g.&#10;John Smith&#10;Jane Doe"
-                              rows={6}
+                              rows={4}
                               required
                               className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all resize-none"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <Input 
+                              label={translations[language].lob}
+                              value={newAgentLOB}
+                              onChange={(e) => setNewAgentLOB(e.target.value)}
+                              placeholder="e.g., Support"
+                            />
+                            <Input 
+                              label={translations[language].agentEmail}
+                              type="email"
+                              value={newAgentEmail}
+                              onChange={(e) => setNewAgentEmail(e.target.value)}
+                              placeholder="email@example.com"
                             />
                           </div>
                           <Input 
@@ -1595,7 +2018,7 @@ export default function App() {
                       )}
                     </div>
 
-                    <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                    <div className={cn("rounded-2xl border p-6 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                       <h2 className="text-lg font-bold text-zinc-900 mb-4">{translations[language].notifiedAgents}</h2>
                       <div className="space-y-2">
                         {employees.filter(emp => conversations.filter(c => c.employeeId === emp.id).length > 0).map(emp => {
@@ -1615,7 +2038,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="md:col-span-8 bg-white rounded-2xl border border-zinc-200 shadow-sm overflow-hidden">
+                  <div className={cn("md:col-span-8 rounded-2xl border shadow-sm overflow-hidden", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                     <div className="p-6 border-b border-zinc-100 flex flex-col gap-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1740,7 +2163,7 @@ export default function App() {
                   className="space-y-6"
                 >
                   {/* RTA Stats Card */}
-                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                  <div className={cn("rounded-2xl border p-8 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
                         <Percent className="text-primary w-6 h-6" />
@@ -1831,7 +2254,7 @@ export default function App() {
                   </div>
 
                   {/* Add RTA Form */}
-                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                  <div className={cn("rounded-2xl border p-8 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                         <UserPlus className="text-green-600 w-6 h-6" />
@@ -1866,7 +2289,7 @@ export default function App() {
                   </div>
 
                   {/* Change Agent's RTA */}
-                  <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
+                  <div className={cn("rounded-2xl border p-8 shadow-sm", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
                         <UserCog className="text-blue-600 w-6 h-6" />
@@ -1924,9 +2347,9 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="bg-white border-t border-zinc-200 p-6 mt-auto">
+      <footer className={cn("border-t p-6 mt-auto", theme === 'dark' ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200')}>
         <div className="max-w-7xl mx-auto text-center">
-          <p className="text-xs text-zinc-400 font-medium uppercase tracking-widest">
+          <p className={cn("text-xs font-medium uppercase tracking-widest", theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400')}>
             {translations[language].appTitle} &copy; {new Date().getFullYear()}
           </p>
         </div>
@@ -2057,6 +2480,178 @@ export default function App() {
                 </Button>
                 <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={deleteSelectedConversations}>
                   {translations[language].delete}
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Modal */}
+      <AnimatePresence>
+        {showProfileModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className={cn("rounded-2xl p-6 max-w-md w-full shadow-xl", theme === 'dark' ? 'bg-zinc-800' : 'bg-white')}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className={cn("text-lg font-bold", theme === 'dark' ? 'text-white' : 'text-zinc-900')}>
+                  {translations[language].updateProfile}
+                </h3>
+                <button onClick={() => setShowProfileModal(false)} className={cn("p-1 rounded-lg transition-colors", theme === 'dark' ? 'text-zinc-400 hover:text-white hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100')}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {profileSuccess && (
+                <div className="mb-4 p-3 bg-green-100 border border-green-200 text-green-700 rounded-lg text-sm">
+                  {profileSuccess}
+                </div>
+              )}
+
+              {profileError && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {profileError}
+                </div>
+              )}
+
+              <div className="space-y-6">
+                {/* Name Update */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <User className="w-4 h-4 text-primary" />
+                    <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700')}>Nome</span>
+                  </div>
+                  <input 
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all", theme === 'dark' ? 'bg-zinc-700 border-zinc-600 text-white' : 'bg-white border-zinc-200 text-zinc-900')}
+                  />
+                  <Button onClick={handleUpdateProfile} className="w-full">
+                    {translations[language].save}
+                  </Button>
+                </div>
+
+                <hr className={theme === 'dark' ? 'border-zinc-700' : 'border-zinc-200'} />
+
+                {/* Theme Toggle */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    {theme === 'dark' ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-primary" />}
+                    <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700')}>{translations[language].theme}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setTheme('light'); localStorage.setItem('theme', 'light'); }}
+                      className={cn("flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all", theme === 'light' ? 'bg-primary text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200')}
+                    >
+                      <Sun className="w-4 h-4 inline mr-2" />
+                      {translations[language].lightMode}
+                    </button>
+                    <button
+                      onClick={() => { setTheme('dark'); localStorage.setItem('theme', 'dark'); }}
+                      className={cn("flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all", theme === 'dark' ? 'bg-primary text-white' : 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600')}
+                    >
+                      <Moon className="w-4 h-4 inline mr-2" />
+                      {translations[language].darkMode}
+                    </button>
+                  </div>
+                </div>
+
+                <hr className={theme === 'dark' ? 'border-zinc-700' : 'border-zinc-200'} />
+
+                {/* Password Change */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lock className="w-4 h-4 text-primary" />
+                    <span className={cn("text-sm font-medium", theme === 'dark' ? 'text-zinc-200' : 'text-zinc-700')}>{translations[language].changePassword}</span>
+                  </div>
+                  <input 
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder={translations[language].currentPassword}
+                    className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all", theme === 'dark' ? 'bg-zinc-700 border-zinc-600 text-white placeholder-zinc-400' : 'bg-white border-zinc-200 text-zinc-900')}
+                  />
+                  <input 
+                    type="password"
+                    value={newPasswordProfile}
+                    onChange={(e) => setNewPasswordProfile(e.target.value)}
+                    placeholder={translations[language].newPassword}
+                    className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all", theme === 'dark' ? 'bg-zinc-700 border-zinc-600 text-white placeholder-zinc-400' : 'bg-white border-zinc-200 text-zinc-900')}
+                  />
+                  <input 
+                    type="password"
+                    value={confirmPasswordProfile}
+                    onChange={(e) => setConfirmPasswordProfile(e.target.value)}
+                    placeholder={translations[language].confirmPassword}
+                    className={cn("w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all", theme === 'dark' ? 'bg-zinc-700 border-zinc-600 text-white placeholder-zinc-400' : 'bg-white border-zinc-200 text-zinc-900')}
+                  />
+                  <Button onClick={handleChangePassword} className="w-full">
+                    {translations[language].changePassword}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* First Login Password Change Modal */}
+      <AnimatePresence>
+        {showFirstLoginModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-8 h-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold text-zinc-900 mb-2">
+                  {translations[language].firstLoginTitle}
+                </h3>
+                <p className="text-sm text-zinc-500">
+                  {translations[language].firstLoginMessage}
+                </p>
+              </div>
+
+              {profileError && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {profileError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{translations[language].newPassword}</label>
+                  <input 
+                    type="password"
+                    value={newPasswordProfile}
+                    onChange={(e) => setNewPasswordProfile(e.target.value)}
+                    className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                    placeholder="Digite sua nova senha"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">{translations[language].confirmPassword}</label>
+                  <input 
+                    type="password"
+                    value={confirmPasswordProfile}
+                    onChange={(e) => setConfirmPasswordProfile(e.target.value)}
+                    className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                    placeholder="Confirme sua nova senha"
+                  />
+                </div>
+                <Button onClick={handleFirstLoginPasswordChange} className="w-full py-3 text-base">
+                  {translations[language].changePassword}
                 </Button>
               </div>
             </motion.div>

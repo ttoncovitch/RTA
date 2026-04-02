@@ -6,3 +6,6 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, getDoc, getDocs, deleteDoc, updateDoc, orderBy };
+
+// Helper for dynamic imports in login
+export { getFirestore };
