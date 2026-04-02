@@ -347,7 +347,8 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
   useEffect(() => {
     const fetchWeather = async (lat: number, lon: number, name: string) => {
       try {
-        const res = await axios.get(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
+        const weatherApiUrl = import.meta.env.VITE_WEATHER_API_URL || 'https://api.open-meteo.com/v1/forecast';
+        const res = await axios.get(`${weatherApiUrl}?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
         setWeather(res.data);
         setLocationName(name);
       } catch (error) {
@@ -361,7 +362,8 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
           try {
-            const geoRes = await axios.get(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=pt`);
+            const geoApiUrl = import.meta.env.VITE_GEO_API_URL || 'https://api.bigdatacloud.net/data/reverse-geocode-client';
+            const geoRes = await axios.get(`${geoApiUrl}?latitude=${lat}&longitude=${lon}&localityLanguage=pt`);
             const city = geoRes.data.city || geoRes.data.locality || "Sua Localidade";
             const country = geoRes.data.countryCode || "";
             const locationString = country ? `${city} - ${country}` : city;
