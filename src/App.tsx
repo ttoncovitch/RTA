@@ -325,86 +325,12 @@ const translations = {
     cancel: "Cancelar",
     rta: "RTA",
     createdBy: "Creado Por"
-  },
-  AR: {
-    welcome: "مرحباً بعودتك",
-    dashboardOverview: "إليك نظرة عامة على لوحة القيادة الخاصة بك اليوم.",
-    forecast: "توقعات لمدة 3 أيام",
-    loadingLocation: "جاري تحميل الموقع...",
-    today: "اليوم",
-    home: "الرئيسية",
-    logConversation: "تسجيل اجتماع",
-    history: "السجل",
-    employees: "الوكلاء",
-    logout: "تسجيل الخروج",
-    loadingTracker: "جاري التحميل...",
-    appTitle: "RTA - متتبع اجتماعات الوكلاء",
-    appSubtitle: "إدارة محادثات الموظفين وتتبع سجل الاجتماعات بسهولة.",
-    managerDashboard: "لوحة تحكم المدير",
-    quickStats: "إحصائيات سريعة",
-    totalLogs: "إجمالي السجلات",
-    notifiedAgents: "الوكلاء الذين تم إخطارهم",
-    top3Notified: "أعلى 3 تم إخطارهم",
-    noDataYet: "لا توجد بيانات حتى الآن",
-    newMeetingLog: "سجل اجتماع جديد",
-    newMeetingSubtitle: "تسجيل تفاعل جديد.",
-    subject: "الموضوع",
-    overbreak: "تجاوز الاستراحة",
-    tardiness: "التأخير",
-    others: "أخرى",
-    notesOptional: "ملاحظات (اختياري)",
-    meetingsLogs: "سجلات الاجتماعات",
-    meetingsLogsSubtitle: "عرض وإدارة جميع المحادثات المسجلة.",
-    filterBySubject: "تصفية حسب الموضوع",
-    allSubjects: "جميع المواضيع",
-    employee: "الموظف",
-    dateTime: "التاريخ والوقت",
-    notes: "ملاحظات",
-    actions: "إجراءات",
-    fullNamesLine: "الأسماء الكاملة (اسم واحد في كل سطر)",
-    employeeList: "قائمة الوكلاء",
-    employeeListSubtitle: (count: number) => `لديك ${count} وكلاء تحت إدارتك.`,
-    noDepartment: "بدون قسم",
-    close: "إغلاق",
-    add: "إضافة",
-    search: "البحث...",
-    filterByEmployee: "تصفية حسب الوكيل",
-    exportExcel: "تصدير إلى Excel",
-    noConversations: "لم يتم العثور على محادثات.",
-    noEmployees: "لم يتم العثور على وكلاء.",
-    viewNotes: "عرض الملاحظات",
-    delete: "حذف",
-    confirmDelete: "هل أنت متأكد أنك تريد الحذف؟",
-    all: "الكل",
-    sortAsc: "أ-ي",
-    sortDesc: "ي-أ",
-    loginButton: "تسجيل الدخول باستخدام Google",
-    date: "التاريخ",
-    time: "الوقت",
-    selectEmployee: "-- اختر المستخدم --",
-    editProfile: "تعديل الملف الشخصي",
-    management: "الإدارة",
-    userManagement: "إدارة المستخدمين",
-    verifyUsers: "التحقق من المستخدمين",
-    confirmAdd: "اكتب 'add' لتأكيد الإضافة",
-    confirmDeleteAction: "اكتب 'delete' لتأكيد الحذف",
-    changePassword: "تغيير كلمة المرور",
-    newName: "الاسم الجديد",
-    newPassword: "كلمة المرور الجديدة",
-    userVerified: "تم التحقق من المستخدم",
-    pendingVerification: "قيد الانتظار",
-    addSuccess: "تم إضافة المستخدم بنجاح",
-    deleteSuccess: "تم حذف المستخدم بنجاح",
-    invalidConfirmation: "تأكيد غير صالح",
-    language: "اللغة",
-    rta: "RTA",
-    createdBy: "تم الإنشاء بواسطة"
   }
 };
 
 // --- Components ---
 
-const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversations: Conversation[], language: 'PT' | 'ES' | 'EN' | 'AR' }) => {
+const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversations: Conversation[], language: 'PT' | 'ES' | 'EN' }) => {
   const [weather, setWeather] = useState<any>(null);
   const [time, setTime] = useState(new Date());
   const [locationName, setLocationName] = useState<string>('');
@@ -657,7 +583,7 @@ export default function App() {
   const [filterDate, setFilterDate] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
   const [activeTab, setActiveTab] = useState<'home' | 'log' | 'history' | 'employees' | 'management'>('home');
-  const [language, setLanguage] = useState<'PT' | 'ES' | 'EN' | 'AR'>('PT');
+  const [language, setLanguage] = useState<'PT' | 'ES' | 'EN'>('PT');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Profile Edit States
@@ -861,10 +787,14 @@ export default function App() {
       alert(translations[language].invalidConfirmation);
       return;
     }
+    if (!newUserEmail.trim() || !newUserName.trim() || !newUserPassword.trim()) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
     try {
       await addDoc(collection(db, 'users'), {
-        email: newUserEmail,
-        displayName: newUserName,
+        email: newUserEmail.trim(),
+        displayName: newUserName.trim(),
         password: newUserPassword,
         role: 'user',
         isVerified: true,
@@ -875,8 +805,10 @@ export default function App() {
       setNewUserPassword('');
       setConfirmText('');
       setUserToVerify(null);
+      alert(translations[language].addSuccess);
     } catch (err) {
       console.error("Add user failed", err);
+      alert('Erro ao adicionar usuário. Tente novamente.');
     }
   };
 
@@ -1019,7 +951,7 @@ export default function App() {
 
   if (!user) {
     return (
-      <div dir={language === 'AR' ? 'rtl' : 'ltr'} className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
         <AnimatePresence mode="wait">
           {isLoggingIn ? (
             <motion.div
@@ -1041,7 +973,7 @@ export default function App() {
               className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl shadow-zinc-200/50 border border-zinc-100 text-center"
             >
               <div className="flex justify-center gap-2 mb-6">
-                {(['PT', 'ES', 'EN', 'AR'] as const).map(lang => (
+                {(['PT', 'ES', 'EN'] as const).map(lang => (
                   <button 
                     key={lang} 
                     onClick={() => setLanguage(lang)}
@@ -1092,7 +1024,7 @@ export default function App() {
   }
 
   return (
-    <div dir={language === 'AR' ? 'rtl' : 'ltr'} className="min-h-screen bg-zinc-50 flex flex-col">
+    <div className="min-h-screen bg-zinc-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-bottom border-zinc-200 px-6 py-4 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -1120,7 +1052,7 @@ export default function App() {
               </button>
               <p className="text-xs text-zinc-500">{user.email}</p>
               <div className="flex gap-1 mt-1">
-                {(['PT', 'ES', 'EN', 'AR'] as const).map(lang => (
+                {(['PT', 'ES', 'EN'] as const).map(lang => (
                   <button 
                     key={lang} 
                     onClick={() => setLanguage(lang)}
