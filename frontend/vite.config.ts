@@ -20,7 +20,15 @@ export default defineConfig(({mode}) => {
       port: 3000,
       strictPort: true,
       hmr: false,
-      allowedHosts: 'all',
+      allowedHosts: [
+        'arabic-cleanup-1.cluster-10.preview.emergentcf.cloud',
+        '.emergentcf.cloud',
+        '.emergentagent.com',
+        '.preview.emergentcf.cloud',
+        '.preview.emergentagent.com',
+        'localhost',
+        '127.0.0.1'
+      ],
       watch: null,
     },
   };
