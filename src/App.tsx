@@ -49,6 +49,8 @@ import axios from 'axios';
 interface Employee {
   id: string;
   name: string;
+  email?: string;
+  lob?: string;
   department?: string;
   createdBy: string;
   creatorName?: string;
@@ -58,6 +60,7 @@ interface Conversation {
   id: string;
   employeeId: string;
   employeeName: string;
+  employeeLob?: string;
   date: string;
   subject: string;
   notes?: string;
@@ -191,8 +194,14 @@ const translations = {
     deleteSuccess: "Usuário excluído com sucesso",
     invalidConfirmation: "Confirmação inválida",
     language: "Idioma",
-    rta: "RTA",
-    createdBy: "Criado Por"
+    rta: "RTA Responsável",
+    createdBy: "Criado Por",
+    save: "Registrar",
+    cancel: "Cancelar",
+    statistics: "Estatísticas",
+    lob: "LOB",
+    email: "Email",
+    agentName: "Nome do Agente"
   },
   EN: {
     welcome: "Welcome back",
@@ -265,8 +274,14 @@ const translations = {
     deleteSuccess: "User deleted successfully",
     invalidConfirmation: "Invalid confirmation",
     language: "Language",
-    rta: "RTA",
-    createdBy: "Created By"
+    rta: "Responsible RTA",
+    createdBy: "Created By",
+    save: "Submit",
+    cancel: "Cancel",
+    statistics: "Statistics",
+    lob: "LOB",
+    email: "Email",
+    agentName: "Agent Name"
   },
   ES: {
     welcome: "Bienvenido de nuevo",
@@ -327,8 +342,12 @@ const translations = {
     customSubject: "Asunto Personalizado",
     save: "Guardar",
     cancel: "Cancelar",
-    rta: "RTA",
-    createdBy: "Creado Por"
+    rta: "RTA Responsable",
+    createdBy: "Creado Por",
+    statistics: "Estadísticas",
+    lob: "LOB",
+    email: "Email",
+    agentName: "Nombre del Agente"
   }
 };
 
@@ -345,41 +364,21 @@ const HomeTab = ({ user, conversations, language }: { user: LocalUser, conversat
   }, []);
 
   useEffect(() => {
-    const fetchWeather = async (lat: number, lon: number, name: string) => {
+    const fetchWeather = async () => {
       try {
+        // Sempre usar Porto - PT
+        const lat = 41.1579;
+        const lon = -8.6291;
         const weatherApiUrl = import.meta.env.VITE_WEATHER_API_URL || 'https://api.open-meteo.com/v1/forecast';
         const res = await axios.get(`${weatherApiUrl}?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`);
         setWeather(res.data);
-        setLocationName(name);
+        setLocationName("Porto - PT");
       } catch (error) {
         console.error("Failed to fetch weather", error);
       }
     };
 
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          try {
-            const geoApiUrl = import.meta.env.VITE_GEO_API_URL || 'https://api.bigdatacloud.net/data/reverse-geocode-client';
-            const geoRes = await axios.get(`${geoApiUrl}?latitude=${lat}&longitude=${lon}&localityLanguage=pt`);
-            const city = geoRes.data.city || geoRes.data.locality || "Sua Localidade";
-            const country = geoRes.data.countryCode || "";
-            const locationString = country ? `${city} - ${country}` : city;
-            fetchWeather(lat, lon, locationString);
-          } catch (e) {
-            fetchWeather(lat, lon, "Sua Localidade");
-          }
-        },
-        (error) => {
-          console.warn("Geolocation denied or failed, using default.");
-          fetchWeather(51.5085, -0.1257, "London - GB");
-        }
-      );
-    } else {
-      fetchWeather(51.5085, -0.1257, "London - GB");
-    }
+    fetchWeather();
   }, []);
 
   const getWeatherIcon = (code: number) => {
@@ -612,7 +611,7 @@ export default function App() {
   const [filterEmployee, setFilterEmployee] = useState('');
   const [filterDate, setFilterDate] = useState('');
   const [filterSubject, setFilterSubject] = useState('');
-  const [activeTab, setActiveTab] = useState<'home' | 'log' | 'history' | 'employees' | 'management'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'log' | 'history' | 'statistics' | 'employees' | 'management'>('home');
   const [language, setLanguage] = useState<'PT' | 'ES' | 'EN'>('PT');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
@@ -636,6 +635,11 @@ export default function App() {
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddEmployeesExpanded, setIsAddEmployeesExpanded] = useState(false);
+
+  // Single Agent Add States
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentEmail, setNewAgentEmail] = useState('');
+  const [newAgentLob, setNewAgentLob] = useState('');
 
   // Toast States
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -718,22 +722,100 @@ export default function App() {
     };
   }, [employees, conversations]);
 
-  // Get list of RTAs for dropdown
+  // Get list of RTAs for dropdown (remove duplicates by name)
   const rtaOptions = useMemo(() => {
-    const rtaSet = new Map<string, string>();
+    const rtaByName = new Map<string, { id: string; name: string }>();
+    
+    // First add from employees
     employees.forEach(emp => {
       if (emp.createdBy && emp.creatorName) {
-        rtaSet.set(emp.createdBy, emp.creatorName);
+        const normalizedName = emp.creatorName.trim().toLowerCase();
+        if (!rtaByName.has(normalizedName)) {
+          rtaByName.set(normalizedName, { id: emp.createdBy, name: emp.creatorName });
+        }
       }
     });
-    // Also add all verified users as potential RTAs
+    
+    // Then add verified users (won't override existing)
     allUsers.forEach(u => {
       if (u.isVerified) {
-        rtaSet.set(u.uid, u.displayName);
+        const normalizedName = u.displayName.trim().toLowerCase();
+        if (!rtaByName.has(normalizedName)) {
+          rtaByName.set(normalizedName, { id: u.uid, name: u.displayName });
+        }
       }
     });
-    return Array.from(rtaSet.entries()).map(([id, name]) => ({ id, name }));
+    
+    return Array.from(rtaByName.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [employees, allUsers]);
+
+  // Statistics calculations
+  const statisticsData = useMemo(() => {
+    // Agents with most notifications
+    const agentNotifications = new Map<string, { name: string; count: number; lob: string }>();
+    conversations.forEach(conv => {
+      const key = conv.employeeId;
+      const existing = agentNotifications.get(key);
+      const employee = employees.find(e => e.id === conv.employeeId);
+      if (existing) {
+        existing.count++;
+      } else {
+        agentNotifications.set(key, { 
+          name: conv.employeeName, 
+          count: 1, 
+          lob: conv.employeeLob || employee?.lob || employee?.department || '-'
+        });
+      }
+    });
+    const topAgents = Array.from(agentNotifications.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Most frequent notifications (subjects)
+    const subjectCounts = new Map<string, number>();
+    conversations.forEach(conv => {
+      subjectCounts.set(conv.subject, (subjectCounts.get(conv.subject) || 0) + 1);
+    });
+    const topSubjects = Array.from(subjectCounts.entries())
+      .map(([subject, count]) => ({ subject, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // LOBs with most notifications
+    const lobCounts = new Map<string, number>();
+    conversations.forEach(conv => {
+      const employee = employees.find(e => e.id === conv.employeeId);
+      const lob = conv.employeeLob || employee?.lob || employee?.department || 'N/A';
+      lobCounts.set(lob, (lobCounts.get(lob) || 0) + 1);
+    });
+    const topLobs = Array.from(lobCounts.entries())
+      .map(([lob, count]) => ({ lob, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // Notifications by day of week
+    const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0]; // Sun, Mon, Tue, Wed, Thu, Fri, Sat
+    const dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    conversations.forEach(conv => {
+      const day = new Date(conv.date).getDay();
+      dayOfWeekCounts[day]++;
+    });
+    const dayStats = dayNames.map((name, index) => ({ day: name, count: dayOfWeekCounts[index] }));
+
+    const maxAgentCount = Math.max(...topAgents.map(a => a.count), 1);
+    const maxSubjectCount = Math.max(...topSubjects.map(s => s.count), 1);
+    const maxLobCount = Math.max(...topLobs.map(l => l.count), 1);
+    const maxDayCount = Math.max(...dayOfWeekCounts, 1);
+
+    return {
+      topAgents,
+      topSubjects,
+      topLobs,
+      dayStats,
+      maxAgentCount,
+      maxSubjectCount,
+      maxLobCount,
+      maxDayCount
+    };
+  }, [conversations, employees]);
 
   const toggleLetter = (letter: string) => {
     setSelectedLetters(prev => {
@@ -982,6 +1064,7 @@ export default function App() {
         await addDoc(collection(db, 'employees'), {
           name,
           department: newEmployeeDept,
+          lob: newEmployeeDept,
           createdBy: user.uid,
           creatorName: user.displayName,
           createdAt: new Date().toISOString()
@@ -989,8 +1072,37 @@ export default function App() {
       }
       setNewEmployeeNames('');
       setNewEmployeeDept('');
+      showToast('Agentes adicionados com sucesso!', 'success');
     } catch (err) {
       console.error("Failed to add employees", err);
+      showToast('Erro ao adicionar agentes.', 'error');
+    }
+  };
+
+  const addSingleAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newAgentName.trim() || !newAgentEmail.trim() || !newAgentLob.trim()) {
+      showToast('Preencha todos os campos obrigatórios.', 'error');
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'employees'), {
+        name: newAgentName.trim(),
+        email: newAgentEmail.trim(),
+        lob: newAgentLob.trim(),
+        department: newAgentLob.trim(),
+        createdBy: user.uid,
+        creatorName: user.displayName,
+        createdAt: new Date().toISOString()
+      });
+      setNewAgentName('');
+      setNewAgentEmail('');
+      setNewAgentLob('');
+      showToast('Agente adicionado com sucesso!', 'success');
+    } catch (err) {
+      console.error("Failed to add agent", err);
+      showToast('Erro ao adicionar agente.', 'error');
     }
   };
 
@@ -1018,6 +1130,7 @@ export default function App() {
       await addDoc(collection(db, 'conversations'), {
         employeeId: selectedEmployeeId,
         employeeName: employee.name,
+        employeeLob: employee.lob || employee.department || '-',
         employeeCreatorName: employee.creatorName || 'Unknown',
         date: `${convDate}T${convTime}:00`,
         subject: finalSubject,
@@ -1029,8 +1142,10 @@ export default function App() {
       setCustomSubject('');
       setConvNotes('');
       setActiveTab('history');
+      showToast('Reunião registrada com sucesso!', 'success');
     } catch (err) {
       console.error("Failed to log conversation", err);
+      showToast('Erro ao registrar reunião.', 'error');
     }
   };
 
@@ -1237,6 +1352,16 @@ export default function App() {
               {translations[language].meetingsLogs}
             </button>
             <button 
+              onClick={() => setActiveTab('statistics')}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
+                activeTab === 'statistics' ? "bg-primary text-white shadow-lg shadow-primary/20" : "text-zinc-600 hover:bg-white hover:text-zinc-900"
+              )}
+            >
+              <BarChart3 className="w-4 h-4" />
+              {translations[language].statistics}
+            </button>
+            <button 
               onClick={() => setActiveTab('employees')}
               className={cn(
                 "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
@@ -1433,6 +1558,7 @@ export default function App() {
                       <thead>
                         <tr className="bg-zinc-50/50">
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].employee}</th>
+                          <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].lob}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].rta}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].dateTime}</th>
                           <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-100">{translations[language].subject}</th>
@@ -1444,7 +1570,7 @@ export default function App() {
                       <tbody>
                         {filteredConversations.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="px-6 py-12 text-center text-zinc-400 italic">
+                            <td colSpan={8} className="px-6 py-12 text-center text-zinc-400 italic">
                               {translations[language].noConversations}
                             </td>
                           </tr>
@@ -1453,6 +1579,9 @@ export default function App() {
                             <tr key={conv.id} className="group hover:bg-zinc-50 transition-colors">
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <span className="text-sm font-bold text-zinc-900">{conv.employeeName}</span>
+                              </td>
+                              <td className="px-6 py-4 border-b border-zinc-100">
+                                <span className="text-xs font-medium px-2 py-1 bg-blue-50 text-blue-700 rounded">{conv.employeeLob || '-'}</span>
                               </td>
                               <td className="px-6 py-4 border-b border-zinc-100">
                                 <span className="text-sm text-zinc-600">{conv.employeeCreatorName || '-'}</span>
@@ -1501,6 +1630,146 @@ export default function App() {
                 </motion.div>
               )}
 
+              {activeTab === 'statistics' && (
+                <motion.div 
+                  key="statistics"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="space-y-8"
+                >
+                  <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-zinc-900">{translations[language].statistics}</h2>
+                    <p className="text-sm text-zinc-500">Análise detalhada das notificações e desempenho</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Agentes com mais notificações */}
+                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+                      <h3 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+                        <Users className="w-5 h-5 text-primary" />
+                        Top Agentes Notificados
+                      </h3>
+                      <div className="space-y-3">
+                        {statisticsData.topAgents.length === 0 ? (
+                          <p className="text-sm text-zinc-400 italic">Sem dados ainda</p>
+                        ) : (
+                          statisticsData.topAgents.map((agent, index) => (
+                            <div key={index} className="flex items-center gap-4">
+                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold text-sm">
+                                {index + 1}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-sm font-medium text-zinc-900">{agent.name}</span>
+                                  <span className="text-xs text-zinc-500">{agent.count} notif.</span>
+                                </div>
+                                <div className="w-full bg-zinc-100 rounded-full h-2 overflow-hidden">
+                                  <div 
+                                    className="bg-gradient-to-r from-primary to-blue-500 h-full rounded-full transition-all"
+                                    style={{ width: `${(agent.count / statisticsData.maxAgentCount) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-zinc-400">{agent.lob}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notificações mais frequentes */}
+                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+                      <h3 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-green-600" />
+                        Tipos de Notificação
+                      </h3>
+                      <div className="space-y-4">
+                        {statisticsData.topSubjects.length === 0 ? (
+                          <p className="text-sm text-zinc-400 italic">Sem dados ainda</p>
+                        ) : (
+                          statisticsData.topSubjects.map((subject, index) => {
+                            const colors = ['bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500', 'bg-purple-500'];
+                            return (
+                              <div key={index}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-zinc-900">{subject.subject}</span>
+                                  <span className="text-sm font-bold text-zinc-700">{subject.count}</span>
+                                </div>
+                                <div className="w-full bg-zinc-100 rounded-full h-3 overflow-hidden">
+                                  <div 
+                                    className={`${colors[index % colors.length]} h-full rounded-full transition-all`}
+                                    style={{ width: `${(subject.count / statisticsData.maxSubjectCount) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* LOBs com mais notificações */}
+                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+                      <h3 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-purple-600" />
+                        Notificações por LOB
+                      </h3>
+                      <div className="space-y-4">
+                        {statisticsData.topLobs.length === 0 ? (
+                          <p className="text-sm text-zinc-400 italic">Sem dados ainda</p>
+                        ) : (
+                          statisticsData.topLobs.map((lob, index) => {
+                            const colors = ['bg-purple-500', 'bg-indigo-500', 'bg-pink-500', 'bg-cyan-500', 'bg-teal-500'];
+                            const percentage = ((lob.count / conversations.length) * 100).toFixed(1);
+                            return (
+                              <div key={index}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium text-zinc-900">{lob.lob}</span>
+                                  <span className="text-xs text-zinc-500">{lob.count} ({percentage}%)</span>
+                                </div>
+                                <div className="w-full bg-zinc-100 rounded-full h-3 overflow-hidden">
+                                  <div 
+                                    className={`${colors[index % colors.length]} h-full rounded-full transition-all`}
+                                    style={{ width: `${(lob.count / statisticsData.maxLobCount) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notificações por dia da semana */}
+                    <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm p-6">
+                      <h3 className="text-lg font-bold text-zinc-900 mb-4 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-orange-600" />
+                        Notificações por Dia da Semana
+                      </h3>
+                      <div className="flex items-end justify-between gap-2 h-48 pt-4">
+                        {statisticsData.dayStats.map((day, index) => {
+                          const height = statisticsData.maxDayCount > 0 
+                            ? (day.count / statisticsData.maxDayCount) * 100 
+                            : 0;
+                          const colors = ['bg-red-400', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-gray-400'];
+                          return (
+                            <div key={index} className="flex-1 flex flex-col items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-600">{day.count}</span>
+                              <div 
+                                className={`w-full ${colors[index]} rounded-t-lg transition-all`}
+                                style={{ height: `${Math.max(height, 5)}%` }}
+                              />
+                              <span className="text-xs text-zinc-500 font-medium">{day.day.slice(0, 3)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {activeTab === 'employees' && (
                 <motion.div 
                   key="employees"
@@ -1522,23 +1791,28 @@ export default function App() {
                         <span>{isAddEmployeesExpanded ? '-' : '+'}</span>
                       </button>
                       {isAddEmployeesExpanded && (
-                        <form onSubmit={addEmployees} className="flex flex-col gap-4">
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{translations[language].fullNamesLine}</label>
-                            <textarea 
-                              value={newEmployeeNames}
-                              onChange={(e) => setNewEmployeeNames(e.target.value)}
-                              placeholder="e.g.&#10;John Smith&#10;Jane Doe"
-                              rows={6}
-                              required
-                              className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all resize-none"
-                            />
-                          </div>
+                        <form onSubmit={addSingleAgent} className="flex flex-col gap-4">
                           <Input 
-                            label="Department"
-                            value={newEmployeeDept}
-                            onChange={(e) => setNewEmployeeDept(e.target.value)}
-                            placeholder="e.g., Sales"
+                            label={translations[language].agentName}
+                            value={newAgentName}
+                            onChange={(e) => setNewAgentName(e.target.value)}
+                            placeholder="Ex: João Silva"
+                            required
+                          />
+                          <Input 
+                            label={translations[language].email}
+                            type="email"
+                            value={newAgentEmail}
+                            onChange={(e) => setNewAgentEmail(e.target.value)}
+                            placeholder="Ex: joao.silva@empresa.com"
+                            required
+                          />
+                          <Input 
+                            label={translations[language].lob}
+                            value={newAgentLob}
+                            onChange={(e) => setNewAgentLob(e.target.value)}
+                            placeholder="Ex: Vendas, Suporte, TI"
+                            required
                           />
                           <Button type="submit" className="w-full justify-center mt-2">
                             {translations[language].add}
@@ -1949,13 +2223,35 @@ export default function App() {
       {/* Add User Modal */}
       <AnimatePresence>
         {userToVerify && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setUserToVerify(null);
+              setConfirmText('');
+              setNewUserName('');
+              setNewUserEmail('');
+              setNewUserPassword('');
+            }}
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl"
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl relative"
+              onClick={(e) => e.stopPropagation()}
             >
+              <button 
+                onClick={() => {
+                  setUserToVerify(null);
+                  setConfirmText('');
+                  setNewUserName('');
+                  setNewUserEmail('');
+                  setNewUserPassword('');
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
               <h3 className="text-xl font-bold text-zinc-900 mb-6">{translations[language].add} User</h3>
               <div className="flex flex-col gap-4">
                 <Input 
@@ -1986,6 +2282,9 @@ export default function App() {
                   <Button variant="ghost" onClick={() => {
                     setUserToVerify(null);
                     setConfirmText('');
+                    setNewUserName('');
+                    setNewUserEmail('');
+                    setNewUserPassword('');
                   }}>
                     {translations[language].cancel}
                   </Button>
