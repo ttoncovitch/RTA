@@ -812,19 +812,19 @@ export default function App() {
     // Simulate a professional transition delay
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'thiago.toncovitch@concentrix.com';
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || '1234';
-    const adminName = import.meta.env.VITE_ADMIN_NAME || 'Thiago Toncovitch';
-    const userEmail = import.meta.env.VITE_USER_EMAIL || 'houcine.cherrak@concentrix.com';
-    const userPassword = import.meta.env.VITE_USER_PASSWORD || '1234';
-    const userName = import.meta.env.VITE_USER_NAME || 'Houcine Cherrak';
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+    const adminName = import.meta.env.VITE_ADMIN_NAME;
+    const userEmail = import.meta.env.VITE_USER_EMAIL;
+    const userPassword = import.meta.env.VITE_USER_PASSWORD;
+    const userName = import.meta.env.VITE_USER_NAME;
 
-    if (email === adminEmail && password === adminPassword) {
-      const mockUser: LocalUser = { uid: email, email, displayName: adminName, role: 'admin', isVerified: true };
+    if (adminEmail && email === adminEmail && adminPassword && password === adminPassword) {
+      const mockUser: LocalUser = { uid: email, email, displayName: adminName || 'Admin', role: 'admin', isVerified: true };
       localStorage.setItem('localUser', JSON.stringify(mockUser));
       setUser(mockUser);
-    } else if (email === userEmail && password === userPassword) {
-      const mockUser: LocalUser = { uid: email, email, displayName: userName, role: 'user', isVerified: true };
+    } else if (userEmail && email === userEmail && userPassword && password === userPassword) {
+      const mockUser: LocalUser = { uid: email, email, displayName: userName || 'User', role: 'user', isVerified: true };
       localStorage.setItem('localUser', JSON.stringify(mockUser));
       setUser(mockUser);
     } else {
