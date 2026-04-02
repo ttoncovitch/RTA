@@ -8,7 +8,8 @@
         "name": { "type": "string", "description": "The full name of the employee." },
         "department": { "type": "string", "description": "The department the employee belongs to." },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the employee record was created." },
-        "createdBy": { "type": "string", "description": "The UID of the manager who added this employee." }
+        "createdBy": { "type": "string", "description": "The UID of the manager who added this employee." },
+        "creatorName": { "type": "string", "description": "The name of the manager who added this employee." }
       },
       "required": ["name", "createdBy"]
     },
@@ -19,12 +20,28 @@
       "properties": {
         "employeeId": { "type": "string", "description": "The ID of the employee." },
         "employeeName": { "type": "string", "description": "The name of the employee (denormalized for easy display)." },
+        "employeeCreatorName": { "type": "string", "description": "The name of the manager who added this employee." },
         "date": { "type": "string", "format": "date-time", "description": "The date and time of the conversation." },
         "subject": { "type": "string", "description": "The subject of the conversation." },
         "notes": { "type": "string", "description": "Additional notes about the conversation." },
-        "createdBy": { "type": "string", "description": "The UID of the manager who recorded this conversation." }
+        "createdBy": { "type": "string", "description": "The UID of the manager who recorded this conversation." },
+        "creatorName": { "type": "string", "description": "The name of the manager who recorded this conversation." }
       },
       "required": ["employeeId", "date", "subject", "createdBy"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the application.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "email": { "type": "string", "description": "The email address of the user." },
+        "displayName": { "type": "string", "description": "The display name of the user." },
+        "role": { "type": "string", "enum": ["admin", "user"], "description": "The role of the user." },
+        "isVerified": { "type": "boolean", "description": "Whether the user is verified by an admin." },
+        "password": { "type": "string", "description": "The user's password (for mock auth fallback)." }
+      },
+      "required": ["uid", "email", "role", "isVerified"]
     }
   },
   "firestore": {
@@ -35,6 +52,10 @@
     "/conversations/{conversationId}": {
       "schema": "Conversation",
       "description": "Collection of conversation logs."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles and roles."
     }
   }
 }
