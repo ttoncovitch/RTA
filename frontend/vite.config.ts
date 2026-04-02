@@ -16,13 +16,11 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      allowedHosts: [
-        'arabic-cleanup-1.cluster-10.preview.emergentcf.cloud',
-        '.preview.emergentagent.com',
-        '.preview.emergentcf.cloud',
-        'all'
-      ],
+      hmr: false,
+      allowedHosts: 'all',
+      watch: {
+        usePolling: false,
+      },
     },
   };
 });

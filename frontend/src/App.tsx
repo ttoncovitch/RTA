@@ -619,6 +619,10 @@ export default function App() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editPasswordConfirm, setEditPasswordConfirm] = useState('');
+
+  // Loading screen state
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
 
   // User Management States
   const [allUsers, setAllUsers] = useState<LocalUser[]>([]);
@@ -635,11 +639,21 @@ export default function App() {
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddEmployeesExpanded, setIsAddEmployeesExpanded] = useState(false);
+  const [isAddBulkExpanded, setIsAddBulkExpanded] = useState(false);
 
   // Single Agent Add States
   const [newAgentName, setNewAgentName] = useState('');
   const [newAgentEmail, setNewAgentEmail] = useState('');
   const [newAgentLob, setNewAgentLob] = useState('');
+
+  // Bulk Agent Add States
+  const [bulkAgentNames, setBulkAgentNames] = useState('');
+  const [bulkAgentLob, setBulkAgentLob] = useState('');
+
+  // Advanced Filter States
+  const [filterBy, setFilterBy] = useState<'name' | 'lob' | 'rta'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'lob' | 'rta'>('name');
+  const [filterValue, setFilterValue] = useState('');
 
   // Toast States
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -652,21 +666,54 @@ export default function App() {
     setToast({ message, type });
   };
 
-  const groupedEmployees = useMemo(() => {
-    const filtered = employees.filter(emp => emp.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    const sorted = [...filtered].sort((a, b) => {
-      if (sortOrder === 'asc') return a.name.localeCompare(b.name);
-      return b.name.localeCompare(a.name);
+  // Advanced filtering and sorting for employees
+  const filteredAndSortedEmployees = useMemo(() => {
+    let filtered = [...employees];
+    
+    // Apply search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(emp => {
+        if (filterBy === 'name') return emp.name.toLowerCase().includes(query);
+        if (filterBy === 'lob') return (emp.lob || emp.department || '').toLowerCase().includes(query);
+        if (filterBy === 'rta') return (emp.creatorName || '').toLowerCase().includes(query);
+        return true;
+      });
+    }
+    
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareA = '';
+      let compareB = '';
+      
+      if (sortBy === 'name') {
+        compareA = a.name;
+        compareB = b.name;
+      } else if (sortBy === 'lob') {
+        compareA = a.lob || a.department || '';
+        compareB = b.lob || b.department || '';
+      } else if (sortBy === 'rta') {
+        compareA = a.creatorName || '';
+        compareB = b.creatorName || '';
+      }
+      
+      return sortOrder === 'asc' 
+        ? compareA.localeCompare(compareB) 
+        : compareB.localeCompare(compareA);
     });
+    
+    return filtered;
+  }, [employees, searchQuery, filterBy, sortBy, sortOrder]);
 
+  const groupedEmployees = useMemo(() => {
     const groups: { [key: string]: Employee[] } = {};
-    sorted.forEach(emp => {
+    filteredAndSortedEmployees.forEach(emp => {
       const letter = emp.name.charAt(0).toUpperCase();
       if (!groups[letter]) groups[letter] = [];
       groups[letter].push(emp);
     });
     return groups;
-  }, [employees, sortOrder, searchQuery]);
+  }, [filteredAndSortedEmployees]);
 
   const [selectedLetters, setSelectedLetters] = useState<string[]>(['ALL']);
 
@@ -891,9 +938,6 @@ export default function App() {
     setLoginError('');
     setIsLoggingIn(true);
     
-    // Simulate a professional transition delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
     const adminName = import.meta.env.VITE_ADMIN_NAME;
@@ -901,14 +945,12 @@ export default function App() {
     const userPassword = import.meta.env.VITE_USER_PASSWORD;
     const userName = import.meta.env.VITE_USER_NAME;
 
+    let loggedInUser: LocalUser | null = null;
+
     if (adminEmail && email === adminEmail && adminPassword && password === adminPassword) {
-      const mockUser: LocalUser = { uid: email, email, displayName: adminName || 'Admin', role: 'admin', isVerified: true };
-      localStorage.setItem('localUser', JSON.stringify(mockUser));
-      setUser(mockUser);
+      loggedInUser = { uid: email, email, displayName: adminName || 'Admin', role: 'admin', isVerified: true };
     } else if (userEmail && email === userEmail && userPassword && password === userPassword) {
-      const mockUser: LocalUser = { uid: email, email, displayName: userName || 'User', role: 'user', isVerified: true };
-      localStorage.setItem('localUser', JSON.stringify(mockUser));
-      setUser(mockUser);
+      loggedInUser = { uid: email, email, displayName: userName || 'User', role: 'user', isVerified: true };
     } else {
       // Check Firestore for users
       try {
@@ -917,25 +959,47 @@ export default function App() {
         if (!snapshot.empty) {
           const userData = snapshot.docs[0].data() as any;
           if (userData.isVerified) {
-            const loggedUser: LocalUser = { uid: snapshot.docs[0].id, email: userData.email, displayName: userData.displayName, role: userData.role, isVerified: userData.isVerified };
-            localStorage.setItem('localUser', JSON.stringify(loggedUser));
-            setUser(loggedUser);
+            loggedInUser = { uid: snapshot.docs[0].id, email: userData.email, displayName: userData.displayName, role: userData.role, isVerified: userData.isVerified };
           } else {
             setLoginError(translations[language].pendingVerification);
+            setIsLoggingIn(false);
+            return;
           }
         } else {
           setLoginError(translations[language].invalidConfirmation || 'Invalid email or password');
+          setIsLoggingIn(false);
+          return;
         }
       } catch (err) {
         setLoginError('Login failed');
+        setIsLoggingIn(false);
+        return;
       }
     }
-    setIsLoggingIn(false);
+
+    if (loggedInUser) {
+      // Show loading screen with random time between 3-7 seconds
+      setIsLoggingIn(false);
+      setShowLoadingScreen(true);
+      const loadingTime = Math.floor(Math.random() * 4000) + 3000; // 3-7 seconds
+      
+      await new Promise(resolve => setTimeout(resolve, loadingTime));
+      
+      localStorage.setItem('localUser', JSON.stringify(loggedInUser));
+      setUser(loggedInUser);
+      setShowLoadingScreen(false);
+    }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    // Validate password confirmation
+    if (editPassword && editPassword !== editPasswordConfirm) {
+      showToast('As senhas não coincidem. Por favor, verifique.', 'error');
+      return;
+    }
 
     try {
       const updatedUser = { ...user, displayName: editName || user.displayName };
@@ -946,18 +1010,22 @@ export default function App() {
         setUser(updatedUser);
       } else {
         // Firestore users
-        await updateDoc(doc(db, 'users', user.uid), {
-          displayName: editName || user.displayName,
-          password: editPassword || undefined
-        });
+        const updateData: any = { displayName: editName || user.displayName };
+        if (editPassword) {
+          updateData.password = editPassword;
+        }
+        await updateDoc(doc(db, 'users', user.uid), updateData);
         localStorage.setItem('localUser', JSON.stringify(updatedUser));
         setUser(updatedUser);
       }
       setShowEditProfile(false);
       setEditName('');
       setEditPassword('');
+      setEditPasswordConfirm('');
+      showToast('Perfil atualizado com sucesso!', 'success');
     } catch (err) {
       console.error("Profile update failed", err);
+      showToast('Erro ao atualizar perfil.', 'error');
     }
   };
 
@@ -1106,6 +1174,54 @@ export default function App() {
     }
   };
 
+  // Add bulk agents with same LOB
+  const addBulkAgents = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !bulkAgentNames.trim() || !bulkAgentLob.trim()) {
+      showToast('Preencha todos os campos obrigatórios.', 'error');
+      return;
+    }
+
+    const names = bulkAgentNames.split('\n').map(n => n.trim()).filter(n => n !== '');
+    if (names.length === 0) {
+      showToast('Adicione pelo menos um nome de agente.', 'error');
+      return;
+    }
+
+    try {
+      for (const name of names) {
+        await addDoc(collection(db, 'employees'), {
+          name,
+          lob: bulkAgentLob.trim(),
+          department: bulkAgentLob.trim(),
+          createdBy: user.uid,
+          creatorName: user.displayName,
+          createdAt: new Date().toISOString()
+        });
+      }
+      setBulkAgentNames('');
+      setBulkAgentLob('');
+      setIsAddBulkExpanded(false);
+      showToast(`${names.length} agentes adicionados com sucesso!`, 'success');
+    } catch (err) {
+      console.error("Failed to add bulk agents", err);
+      showToast('Erro ao adicionar agentes.', 'error');
+    }
+  };
+
+  // Delete all employees
+  const deleteAllEmployees = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'employees'));
+      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      showToast('Todos os agentes foram excluídos.', 'success');
+    } catch (err) {
+      console.error("Failed to delete all employees", err);
+      showToast('Erro ao excluir agentes.', 'error');
+    }
+  };
+
   const confirmDeleteEmployee = async () => {
     if (!employeeToDelete) return;
     try {
@@ -1191,6 +1307,156 @@ export default function App() {
           <div className="w-12 h-12 border-4 border-zinc-200 border-t-zinc-900 rounded-full animate-spin" />
           <p className="text-zinc-500 font-medium animate-pulse">{translations[language].loadingTracker}</p>
         </div>
+      </div>
+    );
+  }
+
+  // Welcome/Loading Screen after login
+  if (showLoadingScreen) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 flex items-center justify-center p-6 overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center relative"
+        >
+          {/* Animated background elements */}
+          <div className="absolute inset-0 -z-10">
+            {[...Array(6)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-32 h-32 border border-white/10 rounded-2xl"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+                animate={{
+                  rotate: [0, 360],
+                  scale: [1, 1.2, 1],
+                  opacity: [0.1, 0.3, 0.1],
+                }}
+                transition={{
+                  duration: 8 + i * 2,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Main animated icons */}
+          <div className="relative mb-8">
+            <motion.div
+              className="w-24 h-24 bg-primary rounded-3xl flex items-center justify-center mx-auto shadow-2xl shadow-primary/30"
+              animate={{
+                scale: [1, 1.1, 1],
+                rotate: [0, 5, -5, 0],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <FileText className="text-white w-12 h-12" />
+            </motion.div>
+            
+            {/* Floating icons around */}
+            <motion.div
+              className="absolute -top-4 -right-4 w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg"
+              animate={{
+                y: [-5, 5, -5],
+                rotate: [0, 10, 0],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              <Calendar className="text-white w-6 h-6" />
+            </motion.div>
+            
+            <motion.div
+              className="absolute -bottom-2 -left-4 w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center shadow-lg"
+              animate={{
+                y: [5, -5, 5],
+                rotate: [0, -10, 0],
+              }}
+              transition={{
+                duration: 2.5,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.5,
+              }}
+            >
+              <CheckCircle className="text-white w-5 h-5" />
+            </motion.div>
+            
+            <motion.div
+              className="absolute top-1/2 -right-8 w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center shadow-lg"
+              animate={{
+                x: [-3, 3, -3],
+                rotate: [0, 15, 0],
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 1,
+              }}
+            >
+              <Users className="text-white w-4 h-4" />
+            </motion.div>
+          </div>
+
+          {/* Welcome text */}
+          <motion.h1 
+            className="text-3xl font-bold text-white mb-3"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            {translations[language].welcome}!
+          </motion.h1>
+          
+          <motion.p 
+            className="text-zinc-400 mb-8 max-w-sm mx-auto"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            Preparando seu ambiente de trabalho...
+          </motion.p>
+
+          {/* Loading bar */}
+          <motion.div 
+            className="w-64 h-2 bg-zinc-700 rounded-full mx-auto overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+          >
+            <motion.div 
+              className="h-full bg-gradient-to-r from-primary via-blue-500 to-primary rounded-full"
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{ 
+                duration: 5, 
+                ease: "easeInOut"
+              }}
+            />
+          </motion.div>
+
+          {/* Loading text */}
+          <motion.p 
+            className="text-zinc-500 text-sm mt-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+          >
+            Carregando registros e anotações...
+          </motion.p>
+        </motion.div>
       </div>
     );
   }
@@ -1779,14 +2045,15 @@ export default function App() {
                   className="grid grid-cols-1 md:grid-cols-12 gap-8"
                 >
                   <div className="md:col-span-4 flex flex-col gap-6">
+                    {/* Add Single Agent */}
                     <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
                       <button 
-                        onClick={() => setIsAddEmployeesExpanded(!isAddEmployeesExpanded)}
-                        className="w-full flex items-center justify-between text-lg font-bold text-zinc-900 mb-6"
+                        onClick={() => { setIsAddEmployeesExpanded(!isAddEmployeesExpanded); setIsAddBulkExpanded(false); }}
+                        className="w-full flex items-center justify-between text-lg font-bold text-zinc-900 mb-4"
                       >
                         <span className="flex items-center gap-2">
                           <UserPlus className="w-5 h-5" />
-                          {translations[language].add} {translations[language].employees}
+                          Adicionar Agente
                         </span>
                         <span>{isAddEmployeesExpanded ? '-' : '+'}</span>
                       </button>
@@ -1821,18 +2088,67 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* Add Bulk Agents */}
+                    <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                      <button 
+                        onClick={() => { setIsAddBulkExpanded(!isAddBulkExpanded); setIsAddEmployeesExpanded(false); }}
+                        className="w-full flex items-center justify-between text-lg font-bold text-zinc-900 mb-4"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Users className="w-5 h-5" />
+                          Adicionar Vários Agentes
+                        </span>
+                        <span>{isAddBulkExpanded ? '-' : '+'}</span>
+                      </button>
+                      {isAddBulkExpanded && (
+                        <form onSubmit={addBulkAgents} className="flex flex-col gap-4">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Nomes dos Agentes (um por linha)</label>
+                            <textarea 
+                              value={bulkAgentNames}
+                              onChange={(e) => setBulkAgentNames(e.target.value)}
+                              placeholder={"João Silva\nMaria Santos\nPedro Costa"}
+                              rows={6}
+                              required
+                              className="px-3 py-2 bg-white border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all resize-none"
+                            />
+                          </div>
+                          <Input 
+                            label="LOB (mesmo para todos)"
+                            value={bulkAgentLob}
+                            onChange={(e) => setBulkAgentLob(e.target.value)}
+                            placeholder="Ex: Vendas"
+                            required
+                          />
+                          <Button type="submit" className="w-full justify-center mt-2">
+                            Adicionar Todos
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+
+                    {/* Notified Agents Summary */}
                     <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
                       <h2 className="text-lg font-bold text-zinc-900 mb-4">{translations[language].notifiedAgents}</h2>
-                      <div className="space-y-2">
-                        {employees.filter(emp => conversations.filter(c => c.employeeId === emp.id).length > 0).map(emp => {
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {employees.filter(emp => conversations.filter(c => c.employeeId === emp.id).length > 0).slice(0, 10).map(emp => {
                           const logCount = conversations.filter(c => c.employeeId === emp.id).length;
                           return (
                             <div key={emp.id} className="flex items-center justify-between p-2 bg-zinc-50 rounded-lg">
-                              <span className="text-sm font-medium">{emp.name}</span>
+                              <div>
+                                <span className="text-sm font-medium">{emp.name}</span>
+                                <span className="text-xs text-zinc-400 ml-2">{emp.lob || emp.department}</span>
+                              </div>
                               {logCount >= 3 ? (
-                                <div className="w-3 h-3 bg-red-500 rounded-full" title="3+ logs" />
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-red-600 font-bold">{logCount}</span>
+                                  <div className="w-3 h-3 bg-red-500 rounded-full" title="3+ logs" />
+                                </div>
                               ) : (
-                                <div className="w-3 h-3 bg-yellow-500 rounded-full" title="1-2 logs" />
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs text-yellow-600 font-bold">{logCount}</span>
+                                  <div className="w-3 h-3 bg-yellow-500 rounded-full" title="1-2 logs" />
+                                </div>
                               )}
                             </div>
                           );
@@ -1846,92 +2162,112 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h2 className="text-lg font-bold text-zinc-900">{translations[language].employeeList}</h2>
-                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(employees.length)}</p>
+                          <p className="text-sm text-zinc-500">{translations[language].employeeListSubtitle(filteredAndSortedEmployees.length)}</p>
                         </div>
-                        <button 
-                          onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                          className="text-sm font-medium text-zinc-500 hover:text-primary transition-colors"
-                        >
-                          Sort: {sortOrder === 'asc' ? translations[language].sortAsc : translations[language].sortDesc}
-                        </button>
                       </div>
-                      <Input
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={translations[language].search}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => setSelectedLetters([])}
-                          className={`px-3 py-1 rounded-lg text-sm font-bold uppercase transition-colors ${selectedLetters.length === 0 ? 'bg-primary text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                        >
-                          None
-                        </button>
-                        <button
-                          onClick={() => setSelectedLetters(['ALL'])}
-                          className={`px-3 py-1 rounded-lg text-sm font-bold uppercase transition-colors ${selectedLetters.includes('ALL') ? 'bg-primary text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
-                        >
-                          {translations[language].all}
-                        </button>
-                        {Object.keys(groupedEmployees).sort().map(letter => (
-                          <button
-                            key={letter}
-                            onClick={() => toggleLetter(letter)}
-                            className={`px-3 py-1 rounded-lg text-sm font-bold uppercase transition-colors ${selectedLetters.includes(letter) ? 'bg-primary text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'}`}
+                      
+                      {/* Modern Filter Controls */}
+                      <div className="flex flex-wrap gap-3 items-center">
+                        <div className="flex-1 min-w-[200px]">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                            <input
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              placeholder="Buscar..."
+                              className="w-full pl-10 pr-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-500 font-medium">Filtrar por:</span>
+                          <select
+                            value={filterBy}
+                            onChange={(e) => setFilterBy(e.target.value as any)}
+                            className="px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                           >
-                            {letter}
+                            <option value="name">Nome</option>
+                            <option value="lob">LOB</option>
+                            <option value="rta">RTA</option>
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-zinc-500 font-medium">Ordenar por:</span>
+                          <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                          >
+                            <option value="name">Nome (A-Z)</option>
+                            <option value="lob">LOB</option>
+                            <option value="rta">RTA</option>
+                          </select>
+                          <button 
+                            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            className="p-2 bg-zinc-50 border border-zinc-200 rounded-xl hover:bg-zinc-100 transition-colors"
+                            title={sortOrder === 'asc' ? 'Ascendente' : 'Descendente'}
+                          >
+                            {sortOrder === 'asc' ? '↑' : '↓'}
                           </button>
-                        ))}
+                        </div>
                       </div>
                     </div>
-                    <div className="divide-y divide-zinc-100">
-                      {Object.keys(groupedEmployees).sort().filter(letter => selectedLetters.includes('ALL') || selectedLetters.includes(letter)).map(letter => (
-                        <div key={letter}>
-                          <div className="bg-zinc-50 px-4 py-2 text-xs font-bold text-zinc-500 uppercase sticky top-0 z-10 border-y border-zinc-100">
-                            {letter}
-                          </div>
-                          <div className="divide-y divide-zinc-100">
-                            {groupedEmployees[letter].map(emp => (
-                              <div key={emp.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-900 font-bold">
-                                    {emp.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-bold text-zinc-900 flex items-center gap-2">
-                                      {emp.name}
-                                      {conversations.filter(c => c.employeeId === emp.id).length >= 3 ? (
-                                        <div className="w-2 h-2 bg-red-500 rounded-full" title="3+ logs" />
-                                      ) : conversations.filter(c => c.employeeId === emp.id).length > 0 ? (
-                                        <div className="w-2 h-2 bg-yellow-500 rounded-full" title="1-2 logs" />
-                                      ) : null}
-                                    </div>
-                                    <p className="text-xs text-zinc-500">{emp.department || translations[language].noDepartment}</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button 
-                                    onClick={() => setShowHistoryPopup(emp.id)}
-                                    className="p-2 text-zinc-400 hover:text-primary transition-colors"
-                                  >
-                                    <History className="w-4 h-4" />
-                                  </button>
-                                  <button 
-                                    onClick={() => setEmployeeToDelete(emp.id)}
-                                    className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                      {Object.keys(groupedEmployees).sort().filter(letter => selectedLetters.includes('ALL') || selectedLetters.includes(letter)).length === 0 && (
+                    
+                    {/* Employee List */}
+                    <div className="divide-y divide-zinc-100 max-h-[500px] overflow-y-auto">
+                      {filteredAndSortedEmployees.length === 0 ? (
                         <div className="p-12 text-center text-zinc-400 italic">
                           {translations[language].noEmployees}
                         </div>
+                      ) : (
+                        filteredAndSortedEmployees.map(emp => (
+                          <div key={emp.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-blue-100 rounded-full flex items-center justify-center text-primary font-bold">
+                                {emp.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+                                  {emp.name}
+                                  {conversations.filter(c => c.employeeId === emp.id).length >= 3 ? (
+                                    <div className="w-2 h-2 bg-red-500 rounded-full" title="3+ logs" />
+                                  ) : conversations.filter(c => c.employeeId === emp.id).length > 0 ? (
+                                    <div className="w-2 h-2 bg-yellow-500 rounded-full" title="1-2 logs" />
+                                  ) : null}
+                                </div>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                  <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded font-medium">
+                                    {emp.lob || emp.department || '-'}
+                                  </span>
+                                  <span className="text-xs text-zinc-400">
+                                    RTA: {emp.creatorName || '-'}
+                                  </span>
+                                  {emp.email && (
+                                    <span className="text-xs text-zinc-400">{emp.email}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => setShowHistoryPopup(emp.id)}
+                                className="p-2 text-zinc-400 hover:text-primary transition-colors"
+                                title="Ver histórico"
+                              >
+                                <History className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => setEmployeeToDelete(emp.id)}
+                                className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -2184,13 +2520,33 @@ export default function App() {
       {/* Edit Profile Modal */}
       <AnimatePresence>
         {showEditProfile && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setShowEditProfile(false);
+              setEditName('');
+              setEditPassword('');
+              setEditPasswordConfirm('');
+            }}
+          >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl"
+              className="bg-white rounded-2xl p-8 max-w-md w-full shadow-xl relative"
+              onClick={(e) => e.stopPropagation()}
             >
+              <button 
+                onClick={() => {
+                  setShowEditProfile(false);
+                  setEditName('');
+                  setEditPassword('');
+                  setEditPasswordConfirm('');
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
               <h3 className="text-xl font-bold text-zinc-900 mb-6">{translations[language].editProfile}</h3>
               <form onSubmit={handleUpdateProfile} className="flex flex-col gap-4">
                 <Input 
@@ -2206,11 +2562,26 @@ export default function App() {
                   onChange={(e) => setEditPassword(e.target.value)}
                   placeholder="••••"
                 />
+                <Input 
+                  label="Confirmar Nova Senha"
+                  type="password"
+                  value={editPasswordConfirm}
+                  onChange={(e) => setEditPasswordConfirm(e.target.value)}
+                  placeholder="••••"
+                />
+                {editPassword && editPasswordConfirm && editPassword !== editPasswordConfirm && (
+                  <p className="text-xs text-red-500 font-medium">As senhas não coincidem</p>
+                )}
                 <div className="flex justify-end gap-3 mt-4">
-                  <Button variant="ghost" onClick={() => setShowEditProfile(false)}>
+                  <Button variant="ghost" onClick={() => {
+                    setShowEditProfile(false);
+                    setEditName('');
+                    setEditPassword('');
+                    setEditPasswordConfirm('');
+                  }}>
                     {translations[language].cancel}
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={editPassword !== editPasswordConfirm && editPassword !== ''}>
                     {translations[language].save}
                   </Button>
                 </div>
